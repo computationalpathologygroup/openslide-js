@@ -20,6 +20,14 @@ jobs:
           cache: npm
           registry-url: 'https://registry.npmjs.org'
 
+      - name: Upgrade npm (for trusted publishing OIDC)
+        run: npm install -g npm@latest
+
+      - name: Print versions
+        run: |
+          node --version
+          npm --version
+
       - run: npm ci
 
       - name: Typecheck
