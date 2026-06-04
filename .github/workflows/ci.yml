@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build WASM via Docker
+        uses: docker/build-push-action@v6
+        with:
+          context: ./wasm
+          load: true
+          tags: openslide-wasm-builder:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Extract WASM artifacts
+        run: |
+          docker create --name wasm-extract openslide-wasm-builder:latest
+          mkdir -p wasm/dist
+          docker cp wasm-extract:/build/out/openslide.js wasm/dist/
+          docker cp wasm-extract:/build/out/openslide.wasm wasm/dist/
+          docker rm wasm-extract
+
+      - name: Build TypeScript
+        run: npm run build:ts
+
+      - name: Unit tests
+        run: npm test

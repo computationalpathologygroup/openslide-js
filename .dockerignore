@@ -1,0 +1,11 @@
+node_modules/
+openslide/
+openslide-java/
+openslide-python/
+openslide-wasm/
+wasm-vips/
+wasm/deps/
+test/data/
+.git
+.claude
+*.tgz

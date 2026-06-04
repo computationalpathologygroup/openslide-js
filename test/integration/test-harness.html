@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>openslide-js integration test harness</title>
+</head>
+<body>
+<script type="module">
+import { OpenSlide, DeepZoomGenerator } from '/dist/esm/index.js';
+
+const TEST = {
+  os: null,
+  _slides: {},
+  _dzGenerators: {},
+
+  async initialize() {
+    if (this.os) return;
+    this.os = await OpenSlide.initialize({
+      wasmUrl: '/wasm/dist/openslide.js',
+      workerCount: 2,
+    });
+  },
+
+  async getVersion() {
+    await this.initialize();
+    return this.os.getVersion();
+  },
+
+  async detectVendor(url) {
+    await this.initialize();
+    return this.os.detectVendor(url);
+  },
+
+  async openSlideFromUrl(url) {
+    await this.initialize();
+    const slide = await this.os.open(url);
+    return this._registerSlide(slide);
+  },
+
+  /**
+   * Fetch a manifest of files, download them all, build VirtualFile[], and open.
+   * @param {string} manifestUrl - URL to the fixtures-manifest endpoint
+   * @param {string} slideFile - The index file path within the directory (e.g. 'CMU-1.mrxs')
+   *   This is placed first in the VirtualFile[] array so the open() method picks it as the index.
+   */
+  async openSlideFromDir(manifestUrl, slideFile) {
+    await this.initialize();
+    const entries = await this._fetchDirEntries(manifestUrl, slideFile);
+    const slide = await this.os.open(entries);
+    return this._registerSlide(slide);
+  },
+
+  /**
+   * Fetch manifest + all files, return VirtualFile[] array.
+   * Places slideFile first so it is recognized as the index file by open().
+   */
+  async _fetchDirEntries(manifestUrl, slideFile) {
+    const resp = await fetch(manifestUrl);
+    const { files } = await resp.json();
+    // Fetch all files in parallel and build VirtualFile[]
+    const entries = await Promise.all(files.map(async (relPath) => {
+      const baseUrl = manifestUrl.replace('/fixtures-manifest/', '/fixtures/');
+      const fileResp = await fetch(baseUrl + '/' + encodeURIComponent(relPath).replace(/%2F/g, '/'));
+      const blob = await fileResp.blob();
+      const filename = relPath.split('/').pop();
+      return { path: relPath, file: new File([blob], filename) };
+    }));
+    // Sort so the slide index file comes first — open() uses the first
+    // root-level entry as the index file.
+    entries.sort((a, b) => {
+      const aIsIndex = a.path === slideFile ? 0 : 1;
+      const bIsIndex = b.path === slideFile ? 0 : 1;
+      return aIsIndex - bIsIndex;
+    });
+    return entries;
+  },
+
+  _registerSlide(slide) {
+    const id = Math.random().toString(36).slice(2);
+    this._slides[id] = slide;
+    return {
+      id,
+      levelCount: slide.levelCount,
+      dimensions: slide.dimensions,
+      levelDimensions: [...slide.levelDimensions],
+      levelDownsamples: [...slide.levelDownsamples],
+      properties: Object.fromEntries(slide.properties),
+      associatedImageNames: [...slide.associatedImageNames],
+    };
+  },
+
+  async readRegion(slideId, x, y, level, w, h) {
+    const slide = this._slides[slideId];
+    const imageData = await slide.readRegion(x, y, level, w, h);
+    const pixels = imageData.data;
+    // Compute simple checksum: sum of first 100 pixel RGBA values
+    let sum = 0;
+    for (let i = 0; i < Math.min(pixels.length, 400); i++) sum += pixels[i];
+    return {
+      width: imageData.width,
+      height: imageData.height,
+      byteLength: pixels.byteLength,
+      checksumFirst100: sum,
+      topLeftRGBA: [pixels[0], pixels[1], pixels[2], pixels[3]],
+    };
+  },
+
+  async getAssociatedImageDimensions(slideId, name) {
+    const slide = this._slides[slideId];
+    return await slide.getAssociatedImageDimensions(name);
+  },
+
+  async readAssociatedImage(slideId, name) {
+    const slide = this._slides[slideId];
+    const imageData = await slide.readAssociatedImage(name);
+    return { width: imageData.width, height: imageData.height };
+  },
+
+  async getBestLevelForDownsample(slideId, downsample) {
+    const slide = this._slides[slideId];
+    return slide.getBestLevelForDownsample(downsample);
+  },
+
+  async getIccProfile(slideId) {
+    const slide = this._slides[slideId];
+    const profile = await slide.getIccProfile();
+    return profile ? { byteLength: profile.byteLength } : null;
+  },
+
+  async closeSlide(slideId) {
+    const slide = this._slides[slideId];
+    await slide.close();
+    delete this._slides[slideId];
+  },
+
+  async createDeepZoom(slideId, options) {
+    const slide = this._slides[slideId];
+    const dz = new DeepZoomGenerator(slide, options);
+    const dzId = Math.random().toString(36).slice(2);
+    this._dzGenerators[dzId] = dz;
+    return {
+      dzId,
+      levelCount: dz.levelCount,
+      tileCount: dz.tileCount,
+      levelDimensions: [...dz.levelDimensions],
+      levelTiles: [...dz.levelTiles],
+    };
+  },
+
+  async getDziTile(dzId, level, col, row) {
+    const dz = this._dzGenerators[dzId];
+    const tile = await dz.getTile(level, col, row);
+    return { width: tile.width, height: tile.height };
+  },
+
+  async terminate() {
+    if (this.os) {
+      this.os.terminate();
+      this.os = null;
+      this._slides = {};
+      this._dzGenerators = {};
+    }
+  },
+};
+
+window.__TEST__ = TEST;
+window.__TEST_READY__ = true;
+</script>
+</body>
+</html>

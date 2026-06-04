@@ -1,0 +1,29 @@
+[binaries]
+c = 'emcc'
+cpp = 'em++'
+ld = 'wasm-ld'
+ar = 'emar'
+ranlib = 'emranlib'
+pkgconfig = ['emconfigure', 'pkg-config']
+
+# GLib cross-compilation properties (https://docs.gtk.org/glib/cross-compiling.html)
+# growing_stack: wasm32 stack grows downward; required by GLib's coroutine/stack-allocation backend
+# have_c99_vsnprintf/snprintf: emscripten libc provides fully C99-conformant printf family
+# have_unix98_printf: enables %zu / %lld format specifiers in glib output helpers
+[properties]
+growing_stack = true
+have_c99_vsnprintf = true
+have_c99_snprintf = true
+have_unix98_printf = true
+
+# Keep meson from injecting -sPTHREAD_POOL_SIZE into installed .pc files —
+# that flag belongs only on the final emcc link, not in pkg-config metadata.
+[built-in options]
+c_thread_count = 0
+cpp_thread_count = 0
+
+[host_machine]
+system = 'emscripten'
+cpu_family = 'wasm32'
+cpu = 'wasm32'
+endian = 'little'

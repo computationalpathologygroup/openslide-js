@@ -1,0 +1,220 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: openslide-js <build@openslide-js>
+Date: Mon, 2 Jun 2026 00:00:00 +0200
+Subject: [PATCH] wasm: thunk GLib sort callbacks via _with_data wrappers
+
+Modern GLib (>= 2.76) internally routes g_list_sort and g_ptr_array_sort
+through their *_with_data variants. The implicit 2-arg GCompareFunc ->
+3-arg GCompareDataFunc dispatch is tolerated by native GCC/clang but
+fails Emscripten's strict function-pointer runtime type check,
+manifesting as "function signature mismatch" at slide-open time on any
+format whose vendor code sorts levels (verified against OpenSlide
+v4.0.0 under Emscripten with GLib 2.88.1 -- failing formats include
+Generic TIFF, Hamamatsu NDPI/VMS, Leica SCN, DICOM).
+
+OpenSlide's native binary distribution (openslide-bin) never sees this
+because native linkers tolerate the cast -- it is genuinely Emscripten-
+specific.
+
+For each affected comparison function, add a _with_data() wrapper that
+ignores user_data and delegates to the original 2-arg implementation,
+then cast the wrapper as (GCompareFunc) at the sort callsite. This is
+the textbook thunk pattern -- a mechanical adapter with no creative
+content. Applied to 8 source files (vendor-zeiss is intentionally
+omitted: it does not exist in v4.0.0; Zeiss CZI vendor support arrives
+in the next OpenSlide release).
+
+---
+ src/openslide-decode-tifflike.c     | 6 +++++-
+ src/openslide-grid.c                | 6 +++++-
+ src/openslide-vendor-dicom.c        | 6 +++++-
+ src/openslide-vendor-generic-tiff.c | 6 +++++-
+ src/openslide-vendor-hamamatsu.c    | 6 +++++-
+ src/openslide-vendor-leica.c        | 6 +++++-
+ src/openslide-vendor-sakura.c       | 6 +++++-
+ src/openslide-vendor-ventana.c      | 6 +++++-
+ 8 files changed, 40 insertions(+), 8 deletions(-)
+
+diff --git a/src/openslide-decode-tifflike.c b/src/openslide-decode-tifflike.c
+--- a/src/openslide-decode-tifflike.c
++++ b/src/openslide-decode-tifflike.c
+@@ -775,11 +775,15 @@ static int tag_compare(gconstpointer a, gconstpointer b) {
+   }
+ }
+
++static int tag_compare_with_data(gconstpointer a, gconstpointer b, gconstpointer user_data) {
++  return tag_compare(a, b);
++}
++
+ static void print_directory(struct _openslide_tifflike *tl,
+                             int64_t dir) {
+   struct tiff_directory *d = tl->directories->pdata[dir];
+   g_autoptr(GList) keys = g_hash_table_get_keys(d->items);
+-  keys = g_list_sort(keys, tag_compare);
++  keys = g_list_sort(keys, (GCompareFunc) tag_compare_with_data);
+   for (GList *el = keys; el; el = el->next) {
+     print_tag(tl, dir, GPOINTER_TO_INT(el->data));
+   }
+diff --git a/src/openslide-grid.c b/src/openslide-grid.c
+--- a/src/openslide-grid.c
++++ b/src/openslide-grid.c
+@@ -651,6 +651,10 @@ static int range_compare_tiles(gconstpointer a, gconstpointer b) {
+   }
+ }
+
++static int range_compare_tiles_with_data(gconstpointer a, gconstpointer b, gconstpointer user_data) {
++  return range_compare_tiles(a, b);
++}
++
+ static void range_get_bounds(struct _openslide_grid *_grid,
+                              struct bounds *bounds) {
+   struct range_grid *grid = (struct range_grid *) _grid;
+@@ -716,7 +720,7 @@ static bool range_paint_region(struct _openslide_grid *_grid,
+       }
+     }
+   }
+-  tiles = g_list_sort(tiles, range_compare_tiles);
++  tiles = g_list_sort(tiles, (GCompareFunc) range_compare_tiles_with_data);
+
+   // draw tiles
+   struct range_tile *prev_tile = NULL;
+diff --git a/src/openslide-vendor-dicom.c b/src/openslide-vendor-dicom.c
+--- a/src/openslide-vendor-dicom.c
++++ b/src/openslide-vendor-dicom.c
+@@ -1070,6 +1070,10 @@ static gint compare_level_width(const void *a, const void *b) {
+   return bb->base.w - aa->base.w;
+ }
+
++static gint compare_level_width_with_data(const void *a, const void *b, const void *user_data) {
++  return compare_level_width(a, b);
++}
++
+ static bool dicom_open(openslide_t *osr,
+                        const char *filename,
+                        struct _openslide_tifflike *tl G_GNUC_UNUSED,
+@@ -1144,7 +1148,7 @@ static bool dicom_open(openslide_t *osr,
+   }
+
+   // sort levels by width
+-  g_ptr_array_sort(level_array, compare_level_width);
++  g_ptr_array_sort(level_array, (GCompareFunc) compare_level_width_with_data);
+
+   struct dicom_level *level0 = level_array->pdata[0];
+   add_properties(osr, level0);
+diff --git a/src/openslide-vendor-generic-tiff.c b/src/openslide-vendor-generic-tiff.c
+--- a/src/openslide-vendor-generic-tiff.c
++++ b/src/openslide-vendor-generic-tiff.c
+@@ -201,6 +201,10 @@ static int width_compare(gconstpointer a, gconstpointer b) {
+   }
+ }
+
++static int width_compare_with_data(gconstpointer a, gconstpointer b, gconstpointer user_data) {
++  return width_compare(a, b);
++}
++
+ static bool generic_tiff_open(openslide_t *osr,
+                               const char *filename,
+                               struct _openslide_tifflike *tl,
+@@ -268,7 +272,7 @@ static bool generic_tiff_open(openslide_t *osr,
+   } while (TIFFReadDirectory(ct.tiff));
+
+   // sort tiled levels
+-  g_ptr_array_sort(level_array, width_compare);
++  g_ptr_array_sort(level_array, (GCompareFunc) width_compare_with_data);
+
+   // set hash and properties
+   struct level *top_level = level_array->pdata[level_array->len - 1];
+diff --git a/src/openslide-vendor-hamamatsu.c b/src/openslide-vendor-hamamatsu.c
+--- a/src/openslide-vendor-hamamatsu.c
++++ b/src/openslide-vendor-hamamatsu.c
+@@ -855,6 +855,10 @@ static gint width_compare(gconstpointer a, gconstpointer b) {
+   return (w1 < w2) - (w1 > w2);
+ }
+
++static int width_compare_with_data(gconstpointer a, gconstpointer b, gconstpointer user_data) {
++  return width_compare(a, b);
++}
++
+ #define CHK(ASSERTION)							\
+   do {									\
+     if (!(ASSERTION)) {							\
+@@ -1239,7 +1243,7 @@ static void create_scaled_jpeg_levels(openslide_t *osr,
+
+   // get sorted keys
+   GList *level_keys = g_hash_table_get_keys(expanded_levels);
+-  level_keys = g_list_sort(level_keys, width_compare);
++  level_keys = g_list_sort(level_keys, (GCompareFunc) width_compare_with_data);
+   //g_debug("number of keys: %d", g_list_length(level_keys));
+
+   // load it
+diff --git a/src/openslide-vendor-leica.c b/src/openslide-vendor-leica.c
+--- a/src/openslide-vendor-leica.c
++++ b/src/openslide-vendor-leica.c
+@@ -315,6 +315,10 @@ static int dimension_compare(const void *a, const void *b) {
+   }
+ }
+
++static int dimension_compare_with_data(const void *a, const void *b, const void *user_data) {
++  return dimension_compare(a, b);
++}
++
+ static void set_region_bounds_props(openslide_t *osr,
+                                     struct level *level0) {
+   int64_t x0 = INT64_MAX;
+@@ -503,7 +507,7 @@ static struct collection *parse_xml_description(const char *xml,
+     }
+
+     // sort dimensions
+-    g_ptr_array_sort(image->dimensions, dimension_compare);
++    g_ptr_array_sort(image->dimensions, (GCompareFunc) dimension_compare_with_data);
+   }
+
+   return g_steal_pointer(&collection);
+diff --git a/src/openslide-vendor-sakura.c b/src/openslide-vendor-sakura.c
+--- a/src/openslide-vendor-sakura.c
++++ b/src/openslide-vendor-sakura.c
+@@ -501,6 +501,10 @@ static gint compare_downsamples(const void *a, const void *b) {
+   }
+ }
+
++static gint compare_downsamples_with_data(const void *a, const void *b, const void *user_data) {
++  return compare_downsamples(a, b);
++}
++
+ static bool read_header(sqlite3 *db, const char *unique_table_name,
+                         int64_t *image_width, int64_t *image_height,
+                         int32_t *_tile_size, int32_t *_focal_planes,
+@@ -869,7 +873,7 @@ static bool sakura_open(openslide_t *osr, const char *filename,
+   // not autoptr; we can't fail after this
+   struct level **levels = g_new(struct level *, level_count);
+   GList *keys = g_hash_table_get_keys(level_hash);
+-  keys = g_list_sort(keys, compare_downsamples);
++  keys = g_list_sort(keys, (GCompareFunc) compare_downsamples_with_data);
+   int32_t i = 0;
+   for (GList *cur = keys; cur; cur = cur->next) {
+     levels[i] = g_hash_table_lookup(level_hash, cur->data);
+diff --git a/src/openslide-vendor-ventana.c b/src/openslide-vendor-ventana.c
+--- a/src/openslide-vendor-ventana.c
++++ b/src/openslide-vendor-ventana.c
+@@ -373,6 +373,10 @@ static int width_compare(gconstpointer a, gconstpointer b) {
+   }
+ }
+
++static int width_compare_with_data(gconstpointer a, gconstpointer b, gconstpointer user_data) {
++  return width_compare(a, b);
++}
++
+ static bool parse_initial_xml(openslide_t *osr, const char *xml,
+                               GError **err) {
+   // parse
+@@ -916,7 +920,7 @@ static bool ventana_open(openslide_t *osr, const char *filename,
+   } while (TIFFReadDirectory(ct.tiff));
+
+   // sort tiled levels
+-  g_ptr_array_sort(level_array, width_compare);
++  g_ptr_array_sort(level_array, (GCompareFunc) width_compare_with_data);
+
+   // get level 0
+   if (level_array->len == 0) {
+--
+2.50.1

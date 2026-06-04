@@ -1,0 +1,74 @@
+{
+  "name": "@computationalpathologygroup/openslide-js",
+  "version": "1.0.0-beta.0",
+  "description": "Client-side whole-slide image library powered by OpenSlide and WebAssembly",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/computationalpathologygroup/openslide-js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/computationalpathologygroup/openslide-js/issues"
+  },
+  "homepage": "https://github.com/computationalpathologygroup/openslide-js#readme",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "beta"
+  },
+  "files": [
+    "dist",
+    "NOTICE",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build:wasm": "docker build -t openslide-wasm-builder ./wasm && docker run --rm -v \"$(pwd)/wasm/dist:/output\" openslide-wasm-builder",
+    "build:wasm:copy": "node scripts/copy-wasm.js",
+    "build:esm": "tsc -p tsconfig.json && node scripts/copy-wasm.js esm",
+    "build:cjs": "tsc -p tsconfig.cjs.json && node scripts/fix-cjs.js && node scripts/copy-wasm.js cjs",
+    "build:ts": "npm run build:esm && npm run build:cjs",
+    "build": "npm run build:wasm && npm run build:ts",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest",
+    "test:integration": "npx playwright test --config test/integration/playwright.config.ts",
+    "test:integration:docker": "npm run test:integration:docker:build && npm run test:integration:docker:run",
+    "test:integration:docker:build": "docker build -t openslide-js-test -f test/integration/Dockerfile .",
+    "test:integration:docker:run": "docker run --rm openslide-js-test",
+    "test:integration:fixtures": "node test/integration/download-fixtures.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "openslide",
+    "whole-slide-image",
+    "wsi",
+    "pathology",
+    "microscopy",
+    "wasm",
+    "webassembly",
+    "deep-zoom",
+    "medical-imaging"
+  ],
+  "license": "LGPL-2.1-only",
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.0.0",
+    "jest": "^30.0.0",
+    "ts-jest": "^29.4.0",
+    "typescript": "^5.7.0"
+  }
+}

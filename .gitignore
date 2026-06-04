@@ -1,0 +1,9 @@
+node_modules/
+dist/
+wasm/dist/
+wasm/deps/
+*.tgz
+.DS_Store
+node_modules
+test/data/
+test-results

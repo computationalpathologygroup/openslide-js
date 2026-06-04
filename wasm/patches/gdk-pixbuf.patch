@@ -1,0 +1,62 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: openslide-js <build@openslide-js>
+Date: Mon, 1 Jun 2026 00:00:00 +0200
+Subject: [PATCH] wasm: skip helper executables when cross-compiling
+
+The gdk-pixbuf-csource, gdk-pixbuf-pixdata, and gdk-pixbuf-query-loaders
+helper binaries are not needed when gdk-pixbuf is consumed as a static
+library in an Emscripten cross-build (e.g., the openslide-js WASM
+pipeline). Emscripten produces .js bundles rather than native binaries
+for the executable() targets, which then upset downstream meson targets
+that expect a real executable to run during installation/testing.
+
+Gate the foreach on `meson.is_cross_build()` so that native builds are
+unaffected. The remaining WASM-incompatibilities (USE_GMODULE dlopen
+plugin loading, shared_module() loader plugins, docs/man generation)
+are already controllable from upstream meson options without source
+modification:
+
+  * USE_GMODULE is already gated on GLib's pkg-config-advertised
+    `gmodule_supported` value (gdk-pixbuf 2.42.x meson.build:241-247).
+    A GLib built without a dlopen backend reports
+    `gmodule_supported=false`, which leaves the #ifdef USE_GMODULE
+    block dead at preprocessor time.
+  * The shared_module() loop is already gated by
+    `builtin_loaders.contains(name) or builtin_all_loaders` — pass
+    `-Dbuiltin_loaders=all` to skip it.
+  * `subdir('docs')` is entered unconditionally but its body is gated
+    internally on `build_docs` (which is false when neither -Dgtk_doc
+    nor -Ddocs is enabled).
+  * man pages and installed tests are gated by -Dman=false and
+    -Dinstalled_tests=false.
+
+The conditional USE_GMODULE meson logic referenced above predates this
+patch and is already present in upstream gdk-pixbuf 2.42.12; it does
+not need to be added here. The strategy of relying on that mechanism
+(rather than stripping the C-level USE_GMODULE block) is informed by
+discere-os/gdk-pixbuf.wasm (LGPL-2.1-or-later).
+---
+ gdk-pixbuf/meson.build | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/gdk-pixbuf/meson.build b/gdk-pixbuf/meson.build
+--- a/gdk-pixbuf/meson.build
++++ b/gdk-pixbuf/meson.build
+@@ -203,6 +203,7 @@ gdkpixbuf_bin = [
+   [ 'gdk-pixbuf-query-loaders', [ 'queryloaders.c' ] ],
+ ]
+
++if not meson.is_cross_build()
+ foreach bin: gdkpixbuf_bin
+   bin_name = bin[0]
+   bin_source = bin.get(1, bin_name + '.c')
+@@ -218,6 +219,7 @@ foreach bin: gdkpixbuf_bin
+   # Used in tests
+   set_variable(bin_name.underscorify(), bin)
+ endforeach
++endif
+
+ if not meson.is_cross_build()
+   # The 'loaders.cache' used for testing, so we don't accidentally
+--
+2.50.1

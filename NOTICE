@@ -1,0 +1,216 @@
+openslide-js
+
+This product is distributed under the GNU Lesser General Public License,
+version 2.1 only (LGPL-2.1-only). See the LICENSE file in the repository
+root for the full license text.
+
+This product bundles and is built from several third-party components,
+each carrying its own license. The notices below identify those
+components, their upstream sources, and the licenses under which they
+are distributed.
+
+================================================================================
+1. Bundled into wasm/dist/openslide.wasm
+================================================================================
+
+The compiled WebAssembly artifact wasm/dist/openslide.wasm statically
+links the following projects. Each retains its own license; the
+combined binary is distributed under LGPL-2.1-only (the strongest
+copyleft of any bundled component).
+
+  OpenSlide
+    Upstream:  https://openslide.org
+               https://github.com/openslide/openslide
+    Pin:       v4.0.0 tagged release (matches the official binary
+               distribution openslide-bin v4.0.0.13)
+    License:   LGPL-2.1-only
+    Note:      Modified via wasm/patches/openslide.patch — eight small
+               mechanical _with_data thunk wrappers for GLib sort
+               callbacks under Emscripten's strict call_indirect type
+               check. The complete corresponding source, including the
+               patch and the fetch script that pins the upstream tag,
+               is available in the wasm/ directory of this repository.
+               Also: wasm/dependencies/fetch-openslide.sh removes
+               subdir('tools') from upstream meson.build via sed
+               (Emscripten cannot link native helper executables).
+
+  GLib
+    Upstream:  https://gitlab.gnome.org/GNOME/glib
+    Pin:       2.88.1
+    License:   LGPL-2.1-or-later
+    Note:      Modified via wasm/patches/glib.patch (10-patch mailbox
+               series from wasm-vips by Kleis Auke Wolthuizen, see
+               Section 3).
+
+  Cairo
+    Upstream:  https://gitlab.freedesktop.org/cairo/cairo
+    Pin:       1.18.4
+    License:   LGPL-2.1-only OR MPL-1.1
+    Note:      Unmodified upstream source.
+
+  gdk-pixbuf
+    Upstream:  https://gitlab.gnome.org/GNOME/gdk-pixbuf
+    Pin:       2.42.12
+    License:   LGPL-2.1-or-later
+    Note:      Modified via wasm/patches/gdk-pixbuf.patch — ~9 lines
+               wrapping the gdkpixbuf_bin executables foreach in
+               `if not meson.is_cross_build()`. Strategy informed by
+               discere-os/gdk-pixbuf.wasm (see Section 3).
+
+  fontconfig
+    Upstream:  https://gitlab.freedesktop.org/fontconfig/fontconfig
+    Pin:       2.17.1
+    License:   MIT (HPND-style)
+    Note:      Unmodified upstream source. Upstream commit e3563fa2
+               (May 2023) migrated src/meson.build to meson's built-in
+               cc.preprocess(), making it Emscripten-buildable without
+               any compiler-detection patch.
+
+  pixman
+    Upstream:  https://gitlab.freedesktop.org/pixman/pixman
+    License:   MIT
+
+  FreeType
+    Upstream:  https://freetype.org
+    License:   FTL OR GPL-2.0-or-later
+
+  libtiff
+    Upstream:  https://gitlab.com/libtiff/libtiff
+    License:   libtiff (BSD-style)
+
+  libjpeg-turbo
+    Upstream:  https://libjpeg-turbo.org
+    License:   IJG AND BSD-3-Clause AND Zlib
+
+  OpenJPEG
+    Upstream:  https://www.openjpeg.org
+    License:   BSD-2-Clause
+
+  libpng
+    Upstream:  http://www.libpng.org/pub/png/libpng.html
+    License:   libpng-2.0
+
+  libxml2
+    Upstream:  https://gitlab.gnome.org/GNOME/libxml2
+    License:   MIT
+
+  Expat (libexpat)
+    Upstream:  https://libexpat.github.io
+    License:   MIT
+
+  zlib
+    Upstream:  https://www.zlib.net
+    License:   Zlib
+
+  zstd
+    Upstream:  https://github.com/facebook/zstd
+    License:   BSD-3-Clause OR GPL-2.0-only
+
+  libffi
+    Upstream:  https://github.com/libffi/libffi
+    License:   MIT
+
+  SQLite
+    Upstream:  https://www.sqlite.org
+    License:   blessing (public-domain dedication)
+
+================================================================================
+2. Source availability (LGPL-2.1 §6)
+================================================================================
+
+The LGPL-2.1-licensed components above (notably OpenSlide, GLib, Cairo,
+and gdk-pixbuf) require that the complete corresponding source of the
+combined work be available to recipients.
+
+The complete corresponding source is the contents of the openslide-js
+repository at https://github.com/computationalpathologygroup/openslide-js,
+specifically the wasm/ directory, which contains:
+
+  - Dockerfile + build.sh — the deterministic build pipeline
+  - dependencies/fetch-*.sh — one fetch script per bundled project,
+    pinning the exact upstream commit/release used
+  - patches/*.patch — every modification applied to upstream sources
+  - openslide-api.c + emscripten-crossfile.meson — the linker glue
+    and Emscripten cross-compilation configuration
+
+Reproducing the bundled wasm binary from these sources requires Docker
+and is documented in README.md under "Building the WASM module".
+
+================================================================================
+3. Build infrastructure attribution
+================================================================================
+
+The WebAssembly build pipeline under wasm/ incorporates work from the
+following upstream projects. Both are MIT-licensed and compatible with
+openslide-js's LGPL-2.1-only distribution.
+
+  @conflux-xyz/openslide-wasm
+    Upstream:  https://github.com/conflux-xyz/openslide-wasm
+               https://www.npmjs.com/package/@conflux-xyz/openslide-wasm
+    License:   MIT (declared in the package's npm package.json; the
+               upstream GitHub repository does not currently carry an
+               explicit LICENSE file)
+    Used for:  The overall WASM build pipeline — the Emscripten base
+               image and required packages, the meson and
+               cmake flag sets for each bundled native library, and
+               the emscripten meson cross-file. No source patches to
+               bundled libraries are derived from this project; 
+               all four originally-imported patches (cairo,
+               fontconfig, gdk-pixbuf, openslide) have meson options, 
+               upstream version upgrades, single-line sed transforms 
+               in the fetch scripts, code informed by other projects 
+               (see entries below).
+
+  wasm-vips (by Kleis Auke Wolthuizen)
+    Upstream:  https://github.com/kleisauke/wasm-vips
+    License:   MIT
+    Used for:  The GLib WebAssembly patch series carried in
+               wasm/patches/glib.patch. Per-patch author lines are
+               preserved in the patch's mailbox-format headers.
+
+  VitoVan/pango-cairo-wasm (by Vito Van)
+    Upstream:  https://github.com/VitoVan/pango-cairo-wasm
+    License:   WTFPL (Do What The Fuck You Want To Public License)
+    Used for:  The strategic insight that cairo can be cross-built for
+               WebAssembly with no source patches: cairo's util/
+               meson.build gates each helper executable
+               (cairo-gobject, cairo-script, cairo-trace, cairo-fdr) on
+               feature_conf flags, and the top-level executable loop
+               iterates an empty list when gtk_dep is not found. With
+               openslide-js's dependency set, none of those targets are
+               triggered, so the previous wasm/patches/cairo.patch
+               (which removed `subdir('util')`) is unnecessary.
+
+  discere-os/gdk-pixbuf.wasm and discere-os/fontconfig.wasm
+    (by Isaac Johnston / Superstruct Ltd)
+    Upstream:  https://github.com/discere-os/gdk-pixbuf.wasm
+               https://github.com/discere-os/fontconfig.wasm
+    License:   LGPL-2.1-or-later (gdk-pixbuf.wasm, matching upstream);
+               upstream fontconfig license + MIT build infrastructure
+               (fontconfig.wasm)
+    Used for:  (1) For gdk-pixbuf — the strategy to cross-build cleanly
+               under Emscripten without source patches to the C loader
+               code: relying on the pre-existing upstream gating of
+               USE_GMODULE on GLib's pkg-config-advertised
+               `gmodule_supported` value, and the `builtin_loaders=all`
+               meson option for the loader-plugin loop. The thin patch
+               at wasm/patches/gdk-pixbuf.patch (only gating helper
+               executables on `meson.is_cross_build()`) is original
+               openslide-js code.
+               (2) For fontconfig — the strategy of pinning fontconfig
+               2.17.1 (which contains upstream commit e3563fa2,
+               May 2023, migrating src/meson.build to meson's built-in
+               cc.preprocess()), eliminating the conflux-xyz-derived
+               `cc.get_id() == 'clang' or ...emscripten` workaround
+               entirely. No patch is needed at fontconfig 2.17.1+.
+
+The Emscripten C glue at wasm/openslide-api.c is distributed under 
+LGPL-2.1-only because it links directly against OpenSlide.
+
+================================================================================
+4. No warranty
+================================================================================
+
+This software is provided "as is", without warranty of any kind,
+express or implied. See the LICENSE file for the full LGPL-2.1-only
+disclaimer of warranty.
