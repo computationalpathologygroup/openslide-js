@@ -1,6 +1,6 @@
 {
   "name": "@computationalpathologygroup/openslide-js",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.3",
   "description": "Client-side whole-slide image library powered by OpenSlide and WebAssembly",
   "type": "module",
   "repository": {
@@ -24,7 +24,38 @@
         "types": "./dist/cjs/index.d.ts",
         "default": "./dist/cjs/index.js"
       }
-    }
+    },
+    "./worker": "./dist/esm/worker.js",
+    "./wasm/openslide.js": "./dist/esm/wasm/openslide.js",
+    "./wasm/openslide.wasm": "./dist/esm/wasm/openslide.wasm",
+    "./single": {
+      "import": {
+        "types": "./dist/esm/single/index.d.ts",
+        "default": "./dist/esm/single/index.js"
+      }
+    },
+    "./single/worker": "./dist/esm/single/worker.js",
+    "./next": {
+      "import": {
+        "types": "./dist/esm/next.d.ts",
+        "default": "./dist/esm/next.js"
+      },
+      "require": {
+        "types": "./dist/cjs/next.d.ts",
+        "default": "./dist/cjs/next.js"
+      }
+    },
+    "./vite": {
+      "import": {
+        "types": "./dist/esm/vite.d.ts",
+        "default": "./dist/esm/vite.js"
+      },
+      "require": {
+        "types": "./dist/cjs/vite.d.ts",
+        "default": "./dist/cjs/vite.js"
+      }
+    },
+    "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public",
@@ -34,12 +65,13 @@
     "dist",
     "NOTICE",
     "README.md",
+    "INTEGRATION.md",
     "LICENSE"
   ],
   "scripts": {
     "build:wasm": "docker build -t openslide-wasm-builder ./wasm && docker run --rm -v \"$(pwd)/wasm/dist:/output\" openslide-wasm-builder",
     "build:wasm:copy": "node scripts/copy-wasm.js",
-    "build:esm": "tsc -p tsconfig.json && node scripts/copy-wasm.js esm",
+    "build:esm": "tsc -p tsconfig.json && node scripts/copy-wasm.js esm && node scripts/bundle-worker.js",
     "build:cjs": "tsc -p tsconfig.cjs.json && node scripts/fix-cjs.js && node scripts/copy-wasm.js cjs",
     "build:ts": "npm run build:esm && npm run build:cjs",
     "build": "npm run build:wasm && npm run build:ts",
@@ -67,6 +99,7 @@
     "@playwright/test": "^1.60.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.0.0",
+    "esbuild": "^0.24.2",
     "jest": "^30.0.0",
     "ts-jest": "^29.4.0",
     "typescript": "^5.7.0"

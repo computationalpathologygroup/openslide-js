@@ -8,6 +8,14 @@
 import { WorkerApi } from './worker-api.js';
 import type { WorkerCommand, WorkerResponse, OpenSlideWasmModule } from './types.js';
 
+/**
+ * Build-time constant injected by esbuild (`--define`) when this worker is bundled.
+ * Selects which Emscripten glue the worker loads by default — `./wasm/openslide.js`
+ * for the standard build, the sibling inlined glue for the single-file build.
+ * Undefined in the raw tsc output (a `typeof` guard handles that fallback).
+ */
+declare const __OPENSLIDE_GLUE_PATH__: string | undefined;
+
 let api: WorkerApi | null = null;
 
 /** Concurrency limiter for readRegion to prevent memory exhaustion. */
@@ -48,12 +56,31 @@ async function handleCommand(cmd: WorkerCommand): Promise<void> {
 
     switch (cmd.cmd) {
       case 'init': {
-        // Dynamic import of the Emscripten module factory
-        const wasmUrl = cmd.wasmUrl ?? new URL('./wasm/openslide.js', import.meta.url).href;
-        const { default: createModule } = await import(/* webpackIgnore: true */ wasmUrl) as {
-          default: () => Promise<OpenSlideWasmModule>;
-        };
-        const mod = await createModule();
+        // Load the Emscripten module factory.
+        type CreateModule = (opts?: { wasmBinary?: ArrayBuffer | Uint8Array }) => Promise<OpenSlideWasmModule>;
+        let createModule: CreateModule;
+        if (cmd.wasmUrl) {
+          // Explicit override: resolve at runtime, hidden from bundlers.
+          ({ default: createModule } = await import(/* webpackIgnore: true */ cmd.wasmUrl) as {
+            default: CreateModule;
+          });
+        } else {
+          // Non-literal specifier defeats webpack's static `import('<lit>')` tracing, which
+          // would otherwise pull the emscripten glue + USE_PTHREADS support into the bundle
+          // (em-pthread circular dep under Next.js). Native ESM still resolves this relative
+          // to worker.js at runtime. Bundler consumers should pass `wasmUrl` instead.
+          //
+          // `__OPENSLIDE_GLUE_PATH__` is substituted at our own build time (esbuild
+          // `--define`): the default bundle points at `./wasm/openslide.js`; the single-file
+          // bundle points at its sibling inlined glue. The `typeof` guard keeps the raw
+          // (un-bundled) tsc output working too. esbuild keeps this import *external*, so the
+          // glue is never inlined into the worker.
+          const gluePath = typeof __OPENSLIDE_GLUE_PATH__ !== 'undefined'
+            ? __OPENSLIDE_GLUE_PATH__
+            : './wasm/openslide.js';
+          ({ default: createModule } = await import(gluePath) as { default: CreateModule });
+        }
+        const mod = await createModule(cmd.wasmBinary ? { wasmBinary: cmd.wasmBinary } : undefined);
         api = new WorkerApi(mod);
         // Ensure /mnt exists for file mounting
         try { mod.FS.mkdir('/mnt'); } catch { /* may exist */ }

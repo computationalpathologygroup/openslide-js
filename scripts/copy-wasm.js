@@ -27,3 +27,20 @@ for (const f of files) {
   copyFileSync(join(srcDir, f), join(destDir, f));
 }
 console.log(`Copied WASM artifacts to dist/${target}/wasm/`);
+
+// Single-file glue (`-sSINGLE_FILE=1`, the `.wasm` base64-inlined): optional. It is
+// only produced once the Docker WASM build emits it, so copy it when present and warn
+// otherwise rather than failing — the standard build must still succeed without it.
+// It lands next to the single-file worker (dist/<target>/single/openslide.single.js).
+const singleGlue = 'openslide.single.js';
+if (existsSync(join(srcDir, singleGlue))) {
+  const singleDir = join(repoRoot, 'dist', target, 'single');
+  mkdirSync(singleDir, { recursive: true });
+  copyFileSync(join(srcDir, singleGlue), join(singleDir, singleGlue));
+  console.log(`Copied ${singleGlue} to dist/${target}/single/`);
+} else {
+  console.warn(
+    `Note: ${singleGlue} not found in ${srcDir} — skipping single-file variant.\n` +
+      'Run `npm run build:wasm` (with the SINGLE_FILE step) to produce it.'
+  );
+}

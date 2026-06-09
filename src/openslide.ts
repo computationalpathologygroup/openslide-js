@@ -47,17 +47,38 @@ export class OpenSlide {
       typeof navigator !== 'undefined' ? navigator.hardwareConcurrency : 4
     ) ?? 4;
 
-    let workerUrl: URL;
-    if (options?.workerUrl) {
-      workerUrl = new URL(options.workerUrl);
-    } else {
-      // @ts-ignore - import.meta.url is valid in ESM; CJS users must pass workerUrl
-      workerUrl = new URL('./worker.js', import.meta.url);
-    }
+    const makeWorker = (): Worker => {
+      if (options?.workerFactory) return options.workerFactory();
+      if (options?.workerUrl) {
+        // @ts-ignore - import.meta.url is valid in ESM; CJS users must pass workerUrl/workerFactory
+        return new Worker(new URL(options.workerUrl, import.meta.url), { type: 'module' });
+      }
+      // Non-literal path defeats webpack 5 / Vite's syntactic
+      // `new Worker(new URL('<lit>', import.meta.url))` detection, which under Next.js
+      // force-traces the pthreaded WASM glue and creates an em-pthread chunk circular
+      // dep with the runtime. Plain-ESM consumers still resolve this at runtime; bundler
+      // consumers MUST pass `workerFactory` or `workerUrl` (see INTEGRATION.md).
+      const workerPath = './worker.js';
+      // @ts-ignore - import.meta.url is valid in ESM; CJS/bundler users pass workerUrl/workerFactory
+      return new Worker(new URL(workerPath, import.meta.url), { type: 'module' });
+    };
+
+    // Absolutise the WASM glue URL once, on the main thread, before posting it to
+    // the workers. Bundlers (Next.js `assetPrefix: '.'`, Vite/Rollup) routinely
+    // hand back *relative* asset URLs; a relative URL posted to the worker would
+    // resolve against the worker's base and double-prefix into a 404. Resolving it
+    // here against `document.baseURI` (or the worker/global base) means relative
+    // bundler asset URLs just work. Already-absolute URLs pass through unchanged.
+    const wasmUrl = options?.wasmUrl
+      ? new URL(
+          options.wasmUrl,
+          typeof document !== 'undefined' ? document.baseURI : self.location.href
+        ).href
+      : undefined;
 
     const initPromises: Promise<void>[] = [];
     for (let i = 0; i < count; i++) {
-      const worker = new Worker(workerUrl, { type: 'module' });
+      const worker = makeWorker();
       const managed: ManagedWorker = { worker, pending: new Map(), activeTasks: 0 };
 
       worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
@@ -74,9 +95,29 @@ export class OpenSlide {
       };
 
       worker.onerror = (e) => {
+        // Surface every field the ErrorEvent gives us, plus the
+        // cross-origin-isolated state (a missing COOP/COEP setup is the most
+        // common cause). `e.message` is `undefined` for cross-origin module-load
+        // failures and opaque worker boot deaths — the two most common bundler
+        // integration failure modes — so a bare message is the least useful thing
+        // we could report.
+        const parts: string[] = [];
+        if (e.message) parts.push(e.message);
+        if (e.filename) parts.push(`at ${e.filename}${e.lineno ? `:${e.lineno}` : ''}`);
+        if (typeof self !== 'undefined' && 'crossOriginIsolated' in self) {
+          parts.push(`crossOriginIsolated=${self.crossOriginIsolated}`);
+        }
+        if (parts.length === 0) {
+          parts.push(
+            'worker died without a message — most often a module-load failure ' +
+            '(check the network tab) or missing COOP/COEP headers ' +
+            '(SharedArrayBuffer unavailable)'
+          );
+        }
+        const msg = `Worker error: ${parts.join(' | ')}`;
         // Reject all pending requests on this worker
         for (const [, req] of managed.pending) {
-          req.reject(new OpenSlideError(`Worker error: ${e.message}`));
+          req.reject(new OpenSlideError(msg));
         }
         managed.pending.clear();
         managed.activeTasks = 0;
@@ -84,7 +125,7 @@ export class OpenSlide {
 
       instance.workers.push(managed);
       initPromises.push(
-        instance.sendTo(managed, { cmd: 'init', wasmUrl: options?.wasmUrl }) as Promise<unknown> as Promise<void>
+        instance.sendTo(managed, { cmd: 'init', wasmUrl, wasmBinary: options?.wasmBinary }) as Promise<unknown> as Promise<void>
       );
     }
 
