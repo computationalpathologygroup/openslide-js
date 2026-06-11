@@ -100,6 +100,33 @@ npm run build
 npm run preview                   # served under http://localhost:4173/openslide-js/
 ```
 
+## Run it with Docker
+
+A `Dockerfile` and `docker-compose.yml` are included. The image builds the Vite app and serves it
+from nginx, which sets the required `Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy`
+headers automatically.
+
+**Using Docker Compose (recommended):**
+
+```bash
+cd demo
+docker compose up --build
+```
+
+Open <http://localhost:5173> in your browser.
+
+**Using Docker directly:**
+
+```bash
+cd demo
+docker build -t openslide-demo .
+docker run -p 5173:80 openslide-demo
+```
+
+Open <http://localhost:5173> in your browser.
+
+To stop: `docker compose down` (or `Ctrl-C` and `docker stop <container>`).
+
 ## Deployment
 
 Pushes to `main` that touch `demo/**` are built and published to GitHub Pages by
