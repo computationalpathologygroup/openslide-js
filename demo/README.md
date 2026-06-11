@@ -75,7 +75,8 @@ almost always a missing-headers problem.
 ## Run it locally
 
 ```bash
-cd demo
+git clone https://github.com/computationalpathologygroup/openslide-js.git
+cd openslide-js/demo
 npm install
 npm run dev
 ```
@@ -109,7 +110,8 @@ headers automatically.
 **Using Docker Compose (recommended):**
 
 ```bash
-cd demo
+git clone https://github.com/computationalpathologygroup/openslide-js.git
+cd openslide-js/demo
 docker compose up --build
 ```
 
@@ -118,7 +120,8 @@ Open <http://localhost:5173> in your browser.
 **Using Docker directly:**
 
 ```bash
-cd demo
+git clone https://github.com/computationalpathologygroup/openslide-js.git
+cd openslide-js/demo
 docker build -t openslide-demo .
 docker run -p 5173:80 openslide-demo
 ```
