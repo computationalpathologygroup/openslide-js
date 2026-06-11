@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WSI Pathology Viewer</title>
+    <!--
+      Enables cross-origin isolation (COOP/COEP) on static hosts that cannot
+      set HTTP headers (e.g. GitHub Pages), which SharedArrayBuffer requires.
+      Resolved under the deploy base path via %BASE_URL%; the service worker
+      scopes itself to that directory, so the /<repo>/ subdir setup works.
+    -->
+    <script src="%BASE_URL%coi-serviceworker.min.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
