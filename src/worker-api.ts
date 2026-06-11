@@ -7,6 +7,9 @@
  */
 
 import type { OpenSlideWasmModule, SlideInfo, Dimensions, VirtualFile } from './types.js';
+import { convertArgbToRgba } from './pixel-convert.js';
+import type { SyncIo } from './io/sync-client.js';
+import { mountUrlViaBroker, mountFilesViaBroker, mountDirViaBroker } from './io/fs-mount.js';
 
 /** Wrapped C functions callable from JS. */
 interface WasmBindings {
@@ -33,9 +36,14 @@ interface WasmBindings {
 export class WorkerApi {
   private mod: OpenSlideWasmModule;
   private fn: WasmBindings;
+  /** Shared I/O channel; mounts route through the broker when present. */
+  private io: SyncIo | null;
+  /** Broker file keys per mount, released on unmount. */
+  private brokerMounts = new Map<string, string[]>();
 
-  constructor(mod: OpenSlideWasmModule) {
+  constructor(mod: OpenSlideWasmModule, io: SyncIo | null = null) {
     this.mod = mod;
+    this.io = io;
     const cw = (name: string, ret: string | null, args: string[]) =>
       mod.cwrap(name, ret, args, { async: true }) as (...a: unknown[]) => Promise<unknown>;
 
@@ -85,38 +93,18 @@ export class WorkerApi {
   }
 
   /**
-   * Convert pre-multiplied ARGB (OpenSlide native) to straight RGBA.
-   * Operates in-place on a Uint8ClampedArray.
+   * Copy `pixels` ARGB words from the WASM heap at `ptr` into a fresh
+   * (transferable) buffer, converting to straight RGBA in the same pass.
+   * The heap view is taken fresh per call — memory growth invalidates
+   * earlier views — and the caller must not await between readRegion
+   * returning and this copy.
    */
-  private argbToRgba(buf: Uint8ClampedArray): void {
-    for (let i = 0; i < buf.length; i += 4) {
-      const a = buf[i + 3]; // In ARGB32 little-endian: byte order is B,G,R,A
-      // Actually OpenSlide stores as 0xAARRGGBB in native endian.
-      // On little-endian (wasm is LE): bytes are [B, G, R, A].
-      // We want RGBA: [R, G, B, A].
-      const b = buf[i];
-      const g = buf[i + 1];
-      const r = buf[i + 2];
-      // a is buf[i + 3]
-
-      if (a === 0) {
-        buf[i] = 0;
-        buf[i + 1] = 0;
-        buf[i + 2] = 0;
-        // buf[i + 3] already 0
-      } else if (a === 255) {
-        buf[i] = r;
-        buf[i + 1] = g;
-        buf[i + 2] = b;
-        // alpha stays 255
-      } else {
-        // Un-premultiply and swap channels
-        buf[i]     = Math.min(255, (r * 255 / a) | 0);
-        buf[i + 1] = Math.min(255, (g * 255 / a) | 0);
-        buf[i + 2] = Math.min(255, (b * 255 / a) | 0);
-        // alpha stays
-      }
-    }
+  private copyHeapArgbAsRgba(ptr: number, pixels: number): ArrayBuffer {
+    const heap = this.mod.HEAPU8;
+    const src = new Uint32Array(heap.buffer, heap.byteOffset + ptr, pixels);
+    const out = new ArrayBuffer(pixels * 4);
+    convertArgbToRgba(src, new Uint32Array(out));
+    return out;
   }
 
   // --- Public API ---
@@ -176,13 +164,9 @@ export class WorkerApi {
     await this.checkError(handle);
     if (!ptr) throw new Error('readRegion returned null');
 
-    const byteLength = w * h * 4;
-    const rgba = new Uint8ClampedArray(byteLength);
-    rgba.set(this.mod.HEAPU8.subarray(ptr, ptr + byteLength));
+    const rgba = this.copyHeapArgbAsRgba(ptr, w * h);
     await this.fn.freeResult(ptr);
-
-    this.argbToRgba(rgba);
-    return rgba.buffer;
+    return rgba;
   }
 
   async readAssociatedImage(handle: number, name: string): Promise<{ buffer: ArrayBuffer; width: number; height: number }> {
@@ -195,13 +179,9 @@ export class WorkerApi {
     await this.checkError(handle);
     if (!ptr) throw new Error(`readAssociatedImage returned null for '${name}'`);
 
-    const byteLength = w * h * 4;
-    const rgba = new Uint8ClampedArray(byteLength);
-    rgba.set(this.mod.HEAPU8.subarray(ptr, ptr + byteLength));
+    const rgba = this.copyHeapArgbAsRgba(ptr, w * h);
     await this.fn.freeResult(ptr);
-
-    this.argbToRgba(rgba);
-    return { buffer: rgba.buffer, width: w, height: h };
+    return { buffer: rgba, width: w, height: h };
   }
 
   async getAssociatedImageDimensions(handle: number, name: string): Promise<Dimensions> {
@@ -239,6 +219,11 @@ export class WorkerApi {
   // --- Filesystem helpers ---
 
   mountFiles(files: File[], mountId: string): string {
+    if (this.io) {
+      const { path, fileKeys } = mountFilesViaBroker(this.mod, files, mountId, this.io);
+      this.brokerMounts.set(mountId, fileKeys);
+      return path;
+    }
     const dir = `/mnt/${mountId}`;
     this.mod.FS.mkdir(dir);
     this.mod.FS.mount(this.mod.WORKERFS, { files }, dir);
@@ -258,6 +243,11 @@ export class WorkerApi {
    *   /mnt/<id>/root/image_1/ ← WORKERFS mount with [Slidedat.ini, Data0001.dat, ...]
    */
   mountDir(entries: VirtualFile[], indexFile: string, mountId: string): string {
+    if (this.io) {
+      const { path, fileKeys } = mountDirViaBroker(this.mod, entries, indexFile, mountId, this.io);
+      this.brokerMounts.set(mountId, fileKeys);
+      return path;
+    }
     const base = `/mnt/${mountId}`;
     this.mod.FS.mkdir(base);
     const root = `${base}/root`;
@@ -312,7 +302,12 @@ export class WorkerApi {
     return `${root}/${indexFile}`;
   }
 
-  mountUrl(url: string, mountId: string): string {
+  async mountUrl(url: string, mountId: string): Promise<string> {
+    if (this.io) {
+      const { path, fileKeys } = await mountUrlViaBroker(this.mod, url, mountId, this.io);
+      this.brokerMounts.set(mountId, fileKeys);
+      return path;
+    }
     const dir = `/mnt/${mountId}`;
     this.mod.FS.mkdir(dir);
     this.mod.FS.mount(this.mod.MEMFS, {}, dir);
@@ -327,6 +322,11 @@ export class WorkerApi {
       this.mod.FS.rmdir(dir);
     } catch {
       // May already be unmounted
+    }
+    const fileKeys = this.brokerMounts.get(mountId);
+    if (fileKeys && this.io) {
+      this.brokerMounts.delete(mountId);
+      this.io.release(fileKeys);
     }
   }
 }

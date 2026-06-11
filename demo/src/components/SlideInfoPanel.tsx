@@ -1,11 +1,42 @@
 import { useState } from 'react';
+import Swal from 'sweetalert2';
 import type { SlideMeta } from '../types';
 
 interface Props {
   meta: SlideMeta;
+  /** Slide (file) name, shown in the associated-image modal title. */
+  slideName: string;
 }
 
-export function SlideInfoPanel({ meta }: Props) {
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!,
+  );
+}
+
+function openImageModal(img: SlideMeta['associatedImages'][number], slideName: string): void {
+  // Capitalize only the image name in JS — CSS text-transform would also
+  // mangle the filename ("CMU-1.svs" → "CMU-1.Svs").
+  const imageName = img.name.charAt(0).toUpperCase() + img.name.slice(1);
+  // The image goes in `html` (not Swal's imageUrl) so it renders below the
+  // title and the popup sizes itself to the image instead of overflowing.
+  void Swal.fire({
+    title: escapeHtml(`${imageName}: ${slideName}`),
+    html:
+      `<img src="${img.dataUrl}" alt="${escapeHtml(img.name)}" class="app-modal__img" />` +
+      `<div class="app-modal__caption">${img.width.toLocaleString()} × ${img.height.toLocaleString()} px</div>`,
+    showConfirmButton: false,
+    showCloseButton: true,
+    customClass: {
+      popup: 'app-modal',
+      title: 'app-modal__title',
+      htmlContainer: 'app-modal__body',
+      closeButton: 'app-modal__close',
+    },
+  });
+}
+
+export function SlideInfoPanel({ meta, slideName }: Props) {
   const [propQuery, setPropQuery] = useState('');
 
   const mppX = meta.properties.get('openslide.mpp-x');
@@ -106,12 +137,19 @@ export function SlideInfoPanel({ meta }: Props) {
           <div className="slide-info__images">
             {meta.associatedImages.map((img) => (
               <div key={img.name} className="slide-info__image-item">
-                <img
-                  src={img.dataUrl}
-                  alt={img.name}
-                  className="slide-info__image"
-                  title={`${img.width} × ${img.height} px`}
-                />
+                <button
+                  type="button"
+                  className="slide-info__image-button"
+                  onClick={() => openImageModal(img, slideName)}
+                  title={`${img.width} × ${img.height} px — click to enlarge`}
+                  aria-label={`View ${img.name} image`}
+                >
+                  <img
+                    src={img.dataUrl}
+                    alt={img.name}
+                    className="slide-info__image"
+                  />
+                </button>
                 <span className="slide-info__image-label">{img.name}</span>
               </div>
             ))}

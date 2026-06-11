@@ -1,3 +1,5 @@
+import type { IoConfig } from './io/protocol.js';
+
 /** Width and height in pixels. */
 export interface Dimensions {
   readonly width: number;
@@ -62,6 +64,26 @@ export interface OpenSlideOptions {
    * Transferred to the worker, so it is consumed once.
    */
   wasmBinary?: ArrayBuffer | Uint8Array;
+  /**
+   * Tuning for the shared I/O layer. When enabled (the default), one extra
+   * lightweight broker worker is spawned via the same worker wiring; it owns
+   * a block cache shared by all decode workers, serves local-file and
+   * HTTP-range reads asynchronously, dedupes identical requests, and
+   * prefetches ahead of sequential access. Disable to fall back to fully
+   * independent per-worker I/O (Emscripten createLazyFile / WORKERFS).
+   */
+  io?: {
+    /** Spawn the shared I/O broker (default: true). */
+    enabled?: boolean;
+    /** Bytes per cached block / per HTTP range request (default: 1 MiB). */
+    blockSize?: number;
+    /** Byte budget of the broker's shared block cache (default: 256 MiB). */
+    brokerCacheBytes?: number;
+    /** Blocks prefetched ahead of sequential reads (default: 2). */
+    readAhead?: number;
+    /** Max concurrent readRegion calls per decode worker (default: 4). */
+    maxConcurrentReads?: number;
+  };
 }
 
 /** Source that can be opened as a slide. */
@@ -78,7 +100,13 @@ export interface VirtualFile {
  * Each command has a unique `id` so responses can be matched.
  */
 export type WorkerCommand =
-  | { id: number; cmd: 'init'; wasmUrl?: string; wasmBinary?: ArrayBuffer | Uint8Array }
+  | {
+      id: number; cmd: 'init'; wasmUrl?: string; wasmBinary?: ArrayBuffer | Uint8Array;
+      /** Present when a shared I/O broker is attached (port is transferred). */
+      ioPort?: MessagePort; ioSab?: SharedArrayBuffer; ioConfig?: IoConfig;
+    }
+  | { id: number; cmd: 'init-broker'; ioConfig: IoConfig }
+  | { id: number; cmd: 'attach-channel'; port: MessagePort; sab: SharedArrayBuffer }
   | { id: number; cmd: 'open'; mountId: string }
   | { id: number; cmd: 'close'; handle: number }
   | { id: number; cmd: 'getSlideInfo'; handle: number }
@@ -91,12 +119,13 @@ export type WorkerCommand =
   | { id: number; cmd: 'mountFile'; files: File[]; mountId: string }
   | { id: number; cmd: 'mountDir'; entries: VirtualFile[]; indexFile: string; mountId: string }
   | { id: number; cmd: 'mountUrl'; url: string; mountId: string }
-  | { id: number; cmd: 'unmount'; mountId: string };
+  | { id: number; cmd: 'unmount'; mountId: string }
+  | { id: number; cmd: 'cancel'; targetId: number };
 
 /** Messages sent from a worker back to the main thread. */
 export type WorkerResponse =
   | { id: number; ok: true; result: unknown }
-  | { id: number; ok: false; error: string };
+  | { id: number; ok: false; error: string; code?: string };
 
 /**
  * Emscripten module shape we expect after createOpenSlideModule() resolves.
@@ -125,4 +154,6 @@ export interface EmscriptenFS {
   readFile: (path: string, opts?: { encoding?: string }) => Uint8Array;
   writeFile: (path: string, data: Uint8Array) => void;
   createLazyFile: (parent: string, name: string, url: string, canRead: boolean, canWrite: boolean) => unknown;
+  /** Emscripten FS error class; instances carry an `errno`. */
+  ErrnoError: new (errno: number) => Error;
 }

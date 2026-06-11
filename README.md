@@ -48,6 +48,14 @@ const slide = await openslide.open(entries);
 
 Slides are read sparsely — only the byte ranges needed to decode the requested Deep Zoom tiles are accessed, via HTTP range requests for URLs (the origin must serve `Accept-Ranges: bytes`) or via the browser's File API for local files — so multi-gigabyte whole-slide images can be browsed in the viewport without ever loading the full file into memory.
 
+All reads go through a shared I/O layer: one lightweight broker worker owns a
+block cache (1 MiB blocks, 256 MiB LRU by default) shared by every decode
+worker, dedupes identical range requests across workers, and prefetches ahead
+of sequential access. Opening the same slide on several workers therefore
+downloads (or reads) each byte once, not once per worker. Tunables — and an
+escape hatch back to fully independent per-worker I/O — live on
+`initialize({ io: { ... } })`; see [INTEGRATION.md](INTEGRATION.md#io-tuning).
+
 ```typescript
 import { DeepZoomGenerator } from '@computationalpathologygroup/openslide-js';
 

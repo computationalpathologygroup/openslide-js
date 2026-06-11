@@ -6,6 +6,9 @@
  */
 
 import { WorkerApi } from './worker-api.js';
+import { ReadQueue, ReadCancelledError } from './read-queue.js';
+import { IoBroker } from './io/broker.js';
+import { SyncIo } from './io/sync-client.js';
 import type { WorkerCommand, WorkerResponse, OpenSlideWasmModule } from './types.js';
 
 /**
@@ -18,29 +21,11 @@ declare const __OPENSLIDE_GLUE_PATH__: string | undefined;
 
 let api: WorkerApi | null = null;
 
+/** Set when this worker was started in broker mode ('init-broker'). */
+let broker: IoBroker | null = null;
+
 /** Concurrency limiter for readRegion to prevent memory exhaustion. */
-const MAX_CONCURRENT_READS = 4;
-let activeReads = 0;
-const readQueue: Array<() => void> = [];
-
-function acquireReadSlot(): Promise<void> {
-  if (activeReads < MAX_CONCURRENT_READS) {
-    activeReads++;
-    return Promise.resolve();
-  }
-  return new Promise<void>((resolve) => {
-    readQueue.push(resolve);
-  });
-}
-
-function releaseReadSlot(): void {
-  activeReads--;
-  const next = readQueue.shift();
-  if (next) {
-    activeReads++;
-    next();
-  }
-}
+let readQueue = new ReadQueue(4);
 
 function reply(msg: WorkerResponse): void {
   if (msg.ok && msg.result instanceof ArrayBuffer) {
@@ -55,6 +40,21 @@ async function handleCommand(cmd: WorkerCommand): Promise<void> {
     let result: unknown;
 
     switch (cmd.cmd) {
+      case 'init-broker': {
+        // Broker mode: this worker only serves I/O for the others. The WASM
+        // glue is never loaded here.
+        broker = new IoBroker(cmd.ioConfig);
+        result = true;
+        break;
+      }
+
+      case 'attach-channel': {
+        if (!broker) throw new Error('Worker is not in broker mode');
+        broker.attachChannel(cmd.port, cmd.sab);
+        result = true;
+        break;
+      }
+
       case 'init': {
         // Load the Emscripten module factory.
         type CreateModule = (opts?: { wasmBinary?: ArrayBuffer | Uint8Array }) => Promise<OpenSlideWasmModule>;
@@ -81,7 +81,14 @@ async function handleCommand(cmd: WorkerCommand): Promise<void> {
           ({ default: createModule } = await import(gluePath) as { default: CreateModule });
         }
         const mod = await createModule(cmd.wasmBinary ? { wasmBinary: cmd.wasmBinary } : undefined);
-        api = new WorkerApi(mod);
+        // Wire the shared I/O channel when the main thread attached one.
+        const syncIo = cmd.ioPort && cmd.ioSab && cmd.ioConfig
+          ? new SyncIo(cmd.ioPort, cmd.ioSab, cmd.ioConfig)
+          : null;
+        if (cmd.ioConfig) {
+          readQueue = new ReadQueue(cmd.ioConfig.maxConcurrentReads);
+        }
+        api = new WorkerApi(mod, syncIo);
         // Ensure /mnt exists for file mounting
         try { mod.FS.mkdir('/mnt'); } catch { /* may exist */ }
         result = true;
@@ -102,7 +109,7 @@ async function handleCommand(cmd: WorkerCommand): Promise<void> {
 
       case 'mountUrl': {
         if (!api) throw new Error('Worker not initialized');
-        result = api.mountUrl(cmd.url, cmd.mountId);
+        result = await api.mountUrl(cmd.url, cmd.mountId);
         break;
       }
 
@@ -134,11 +141,11 @@ async function handleCommand(cmd: WorkerCommand): Promise<void> {
 
       case 'readRegion': {
         if (!api) throw new Error('Worker not initialized');
-        await acquireReadSlot();
+        await readQueue.acquire(cmd.id);
         try {
           result = await api.readRegion(cmd.handle, cmd.x, cmd.y, cmd.level, cmd.w, cmd.h);
         } finally {
-          releaseReadSlot();
+          readQueue.release();
         }
         break;
       }
@@ -173,12 +180,24 @@ async function handleCommand(cmd: WorkerCommand): Promise<void> {
         break;
       }
 
+      case 'cancel': {
+        // Drop the target read if it is still waiting for a slot; its own
+        // acquire() rejects and replies with code 'cancelled'. Reads that
+        // already entered the WASM cannot be cancelled.
+        result = readQueue.cancel(cmd.targetId);
+        break;
+      }
+
       default:
         throw new Error(`Unknown command: ${(cmd as WorkerCommand).cmd}`);
     }
 
     reply({ id: cmd.id, ok: true, result });
   } catch (err) {
+    if (err instanceof ReadCancelledError) {
+      reply({ id: cmd.id, ok: false, error: err.message, code: err.code });
+      return;
+    }
     let errMsg: string;
     if (err instanceof Error) {
       errMsg = err.message || err.toString();

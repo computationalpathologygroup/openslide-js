@@ -9,9 +9,20 @@
 import type { Dimensions, SlideInfo } from './types.js';
 import { OpenSlideError } from './errors.js';
 
+/** Per-call options for worker-delegated operations. */
+export interface SendOptions {
+  /** Transferables to move (not copy) to the worker. */
+  transfer?: Transferable[];
+  /**
+   * Cancels the operation if it is still queued in the worker (rejects with
+   * OpenSlideAbortError). An already-executing read runs to completion.
+   */
+  signal?: AbortSignal;
+}
+
 /** Function type for sending a command to a worker and awaiting the response. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type SendCommand = (cmd: Record<string, any>) => Promise<unknown>;
+export type SendCommand = (cmd: Record<string, any>, opts?: SendOptions) => Promise<unknown>;
 
 export class Slide {
   /** @internal */ private _send: SendCommand;
@@ -78,6 +89,8 @@ export class Slide {
    * @param level - Pyramid level to read from.
    * @param width - Width in pixels at the target level.
    * @param height - Height in pixels at the target level.
+   * @param options.signal - Cancels the read while it is still queued in the
+   *   worker (rejects with OpenSlideAbortError); an executing read finishes.
    * @returns ImageData containing RGBA pixel data.
    */
   async readRegion(
@@ -86,6 +99,7 @@ export class Slide {
     level: number,
     width: number,
     height: number,
+    options?: { signal?: AbortSignal },
   ): Promise<ImageData> {
     this.ensureOpen();
     const buffer = await this._send({
@@ -93,7 +107,7 @@ export class Slide {
       handle: this._handle,
       x, y, level,
       w: width, h: height,
-    }) as ArrayBuffer;
+    }, { signal: options?.signal }) as ArrayBuffer;
 
     const data = new Uint8ClampedArray(buffer);
     return new ImageData(data, width, height);

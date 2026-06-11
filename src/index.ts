@@ -5,7 +5,7 @@ export { DeepZoomGenerator } from './deep-zoom.js';
 export type { DeepZoomOptions } from './deep-zoom.js';
 
 // Errors
-export { OpenSlideError, OpenSlideUnsupportedFormatError } from './errors.js';
+export { OpenSlideError, OpenSlideAbortError, OpenSlideUnsupportedFormatError } from './errors.js';
 
 // Types
 export type {

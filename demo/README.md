@@ -1,4 +1,4 @@
-# openslide-js slide viewer demo
+# openslide-js demo viewer
 
 A browser-based whole-slide image (WSI) viewer built on
 [`@computationalpathologygroup/openslide-js`](https://www.npmjs.com/package/@computationalpathologygroup/openslide-js)
@@ -122,8 +122,8 @@ Open <http://localhost:5173> in your browser.
 ```bash
 git clone https://github.com/computationalpathologygroup/openslide-js.git
 cd openslide-js/demo
-docker build -t openslide-demo .
-docker run -p 5173:80 openslide-demo
+docker build -t openslide-js-demo-viewer .
+docker run -p 5173:80 openslide-js-demo-viewer
 ```
 
 Open <http://localhost:5173> in your browser.

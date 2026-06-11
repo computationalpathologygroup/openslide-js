@@ -142,21 +142,37 @@ export function OpenSlideViewer({ entry, className, onSlideReady }: Props) {
         // errors). One handle loads fast and reliably — decode parallelism gives
         // little benefit when the bytes arrive serially over the network anyway.
         const poolSize = entry.kind === 'multi' ? 1 : WORKER_COUNT;
-        const slides = await Promise.all(
-          Array.from({ length: poolSize }, () =>
-            openslide.open(slideArg as Parameters<typeof openslide.open>[0]),
-          ),
-        );
+
+        // Progressive pool: open ONE handle and build the viewer on it
+        // immediately — first tiles render after a single open instead of
+        // waiting for the whole pool. The remaining handles open in the
+        // background and join the (closed-over) generator array as they
+        // arrive; the tile source's round-robin reads generators.length per
+        // tile, so it picks them up automatically.
+        const slide = await openslide.open(slideArg as Parameters<typeof openslide.open>[0]);
         if (cancelled) {
-          await Promise.all(slides.map((s) => s.close().catch(() => {})));
+          await slide.close().catch(() => {});
           return;
         }
-        slidesRef.current = slides;
+        slidesRef.current = [slide];
 
-        const generators = slides.map((s) => new DeepZoomGenerator(s));
-        const slide = slides[0]; // metadata source
-
-        if (cancelled) return;
+        const generators = [new DeepZoomGenerator(slide)];
+        for (let i = 1; i < poolSize; i++) {
+          openslide.open(slideArg as Parameters<typeof openslide.open>[0])
+            .then((s) => {
+              if (cancelled) {
+                s.close().catch(() => {});
+                return;
+              }
+              slidesRef.current.push(s);
+              generators.push(new DeepZoomGenerator(s));
+            })
+            .catch((err) => {
+              // The slide is already rendering on the first handle; a failed
+              // extra lane only reduces parallelism.
+              console.warn('extra decode handle failed to open:', err);
+            });
+        }
 
         viewerRef.current?.destroy();
 

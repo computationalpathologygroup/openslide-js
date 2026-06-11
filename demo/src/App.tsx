@@ -24,7 +24,7 @@ function AppShell() {
   return (
     <div className="app">
       <header className="app__header">
-        <h1 className="app__title">openslide-js slide viewer demo</h1>
+        <h1 className="app__title">openslide-js demo viewer</h1>
         <div className="app__header-links">
           <a
             href="https://www.npmjs.com/package/@computationalpathologygroup/openslide-js"

@@ -106,6 +106,34 @@ const openslide = await OpenSlide.initialize({
 > slot, each `new Worker(...)` loading the same self-contained `worker.js`. Each worker holds an
 > independent WASM instance.
 
+> **One extra worker: the I/O broker.** Unless `io: { enabled: false }` is passed, `initialize()`
+> calls your `workerFactory` **one additional time** to spawn the shared I/O broker — the same
+> `worker.js`, switched into broker mode by its first message. It never loads the WASM (no
+> `wasmBinary` is sent to it); it owns the block cache shared by all decode workers and performs
+> all local-file and HTTP-range reads asynchronously. No wiring changes are needed.
+
+## I/O tuning
+
+The shared I/O layer is on by default and needs no configuration. Knobs, with defaults:
+
+```ts
+const openslide = await OpenSlide.initialize({
+  // ...worker/wasm wiring as above...
+  io: {
+    enabled: true,                          // false → legacy per-worker I/O (createLazyFile/WORKERFS)
+    blockSize: 1024 * 1024,                 // bytes per cached block / per HTTP range request
+    brokerCacheBytes: 256 * 1024 * 1024,    // shared LRU cache budget
+    readAhead: 2,                           // blocks prefetched ahead of sequential reads
+    maxConcurrentReads: 4,                  // concurrent readRegion calls per decode worker
+  },
+});
+```
+
+`Slide.readRegion()` and `DeepZoomGenerator.getTile()` also accept a trailing
+`{ signal?: AbortSignal }`: aborting cancels the read while it is still queued in the worker
+(rejecting with `OpenSlideAbortError`, `name === 'AbortError'`); a read that already entered the
+WASM runs to completion. Viewers should abort tiles that scroll out of view during pan/zoom.
+
 ## Next.js
 
 ### Config — `.wasm` rule + required headers

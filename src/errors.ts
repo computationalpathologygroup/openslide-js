@@ -11,6 +11,19 @@ export class OpenSlideError extends Error {
   }
 }
 
+/**
+ * Thrown when an operation is cancelled via an AbortSignal before it ran
+ * (e.g. a queued readRegion whose tile was panned out of view).
+ * `name` is 'AbortError' so generic abort filters recognise it.
+ */
+export class OpenSlideAbortError extends OpenSlideError {
+  constructor(message?: string) {
+    super(message ?? 'The operation was aborted');
+    this.name = 'AbortError';
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
 /** Thrown when the file format is not supported by OpenSlide. */
 export class OpenSlideUnsupportedFormatError extends OpenSlideError {
   constructor(message?: string) {

@@ -45,7 +45,7 @@ export function SlidePane({ entry, onClose }: Props) {
           className="slide-pane__viewer-area"
         />
         {showInfo && meta && (
-          <SlideInfoPanel meta={meta} />
+          <SlideInfoPanel meta={meta} slideName={entry.name} />
         )}
       </div>
     </div>

@@ -13,9 +13,11 @@ import type {
   SlideInfo,
   WorkerResponse,
 } from './types.js';
-import { OpenSlideError } from './errors.js';
+import { OpenSlideError, OpenSlideAbortError } from './errors.js';
 import { Slide } from './slide.js';
 import type { SendCommand } from './slide.js';
+import { DEFAULT_IO_CONFIG, HEADER_BYTES } from './io/protocol.js';
+import type { IoConfig } from './io/protocol.js';
 
 interface PendingRequest {
   resolve: (value: unknown) => void;
@@ -30,6 +32,8 @@ interface ManagedWorker {
 
 export class OpenSlide {
   private workers: ManagedWorker[] = [];
+  /** Shared I/O broker worker (block cache + async fetch), if enabled. */
+  private broker: ManagedWorker | null = null;
   private nextId = 1;
   private terminated = false;
 
@@ -76,8 +80,7 @@ export class OpenSlide {
         ).href
       : undefined;
 
-    const initPromises: Promise<void>[] = [];
-    for (let i = 0; i < count; i++) {
+    const makeManaged = (): ManagedWorker => {
       const worker = makeWorker();
       const managed: ManagedWorker = { worker, pending: new Map(), activeTasks: 0 };
 
@@ -89,6 +92,8 @@ export class OpenSlide {
         managed.activeTasks--;
         if (resp.ok) {
           req.resolve(resp.result);
+        } else if (resp.code === 'cancelled') {
+          req.reject(new OpenSlideAbortError());
         } else {
           req.reject(new OpenSlideError(resp.error));
         }
@@ -123,10 +128,61 @@ export class OpenSlide {
         managed.activeTasks = 0;
       };
 
+      return managed;
+    };
+
+    // Resolve the I/O tuning once; the same config goes to the broker and to
+    // every decode worker (they must agree on blockSize).
+    const ioConfig: IoConfig = {
+      ...DEFAULT_IO_CONFIG,
+      blockSize: options?.io?.blockSize ?? DEFAULT_IO_CONFIG.blockSize,
+      brokerCacheBytes: options?.io?.brokerCacheBytes ?? DEFAULT_IO_CONFIG.brokerCacheBytes,
+      readAhead: options?.io?.readAhead ?? DEFAULT_IO_CONFIG.readAhead,
+      maxConcurrentReads: options?.io?.maxConcurrentReads ?? DEFAULT_IO_CONFIG.maxConcurrentReads,
+    };
+
+    // Spawn the shared I/O broker — one extra worker through the same
+    // factory, switched into broker mode by its first message (it never
+    // loads the WASM). On any failure, fall back to per-worker I/O.
+    const ioEnabled = options?.io?.enabled !== false && typeof SharedArrayBuffer !== 'undefined';
+    if (ioEnabled) {
+      try {
+        const broker = makeManaged();
+        await instance.sendTo(broker, { cmd: 'init-broker', ioConfig });
+        instance.broker = broker;
+      } catch (err) {
+        console.warn('openslide-js: shared I/O broker unavailable, using per-worker I/O.', err);
+        instance.broker = null;
+      }
+    }
+
+    const initPromises: Promise<unknown>[] = [];
+    for (let i = 0; i < count; i++) {
+      const managed = makeManaged();
       instance.workers.push(managed);
-      initPromises.push(
-        instance.sendTo(managed, { cmd: 'init', wasmUrl, wasmBinary: options?.wasmBinary }) as Promise<unknown> as Promise<void>
-      );
+
+      if (instance.broker) {
+        const channel = new MessageChannel();
+        const sab = new SharedArrayBuffer(HEADER_BYTES + ioConfig.blockSize);
+        initPromises.push(
+          instance.sendTo(
+            instance.broker,
+            { cmd: 'attach-channel', port: channel.port2, sab },
+            { transfer: [channel.port2] },
+          ),
+        );
+        initPromises.push(
+          instance.sendTo(
+            managed,
+            { cmd: 'init', wasmUrl, wasmBinary: options?.wasmBinary, ioPort: channel.port1, ioSab: sab, ioConfig },
+            { transfer: [channel.port1] },
+          ),
+        );
+      } else {
+        initPromises.push(
+          instance.sendTo(managed, { cmd: 'init', wasmUrl, wasmBinary: options?.wasmBinary, ioConfig }),
+        );
+      }
     }
 
     await Promise.all(initPromises);
@@ -215,10 +271,11 @@ export class OpenSlide {
     return await this.sendTo(this.workers[0], { cmd: 'getVersion' }) as string;
   }
 
-  /** Terminate all workers. The instance cannot be used after this. */
+  /** Terminate all workers (including the I/O broker). The instance cannot be used after this. */
   terminate(): void {
     this.terminated = true;
-    for (const { worker, pending } of this.workers) {
+    const all = this.broker ? [...this.workers, this.broker] : this.workers;
+    for (const { worker, pending } of all) {
       for (const [, req] of pending) {
         req.reject(new OpenSlideError('OpenSlide terminated'));
       }
@@ -226,6 +283,7 @@ export class OpenSlide {
       worker.terminate();
     }
     this.workers = [];
+    this.broker = null;
   }
 
   // --- Internal ---
@@ -240,18 +298,41 @@ export class OpenSlide {
     return best;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private sendTo(managed: ManagedWorker, cmd: Record<string, any>): Promise<unknown> {
+  private sendTo(
+    managed: ManagedWorker,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    cmd: Record<string, any>,
+    opts?: { transfer?: Transferable[]; signal?: AbortSignal },
+  ): Promise<unknown> {
+    if (opts?.signal?.aborted) {
+      return Promise.reject(new OpenSlideAbortError());
+    }
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
       managed.pending.set(id, { resolve, reject });
       managed.activeTasks++;
-      managed.worker.postMessage({ ...cmd, id });
+      if (opts?.transfer) {
+        managed.worker.postMessage({ ...cmd, id }, opts.transfer);
+      } else {
+        managed.worker.postMessage({ ...cmd, id });
+      }
+      // A cancel is best-effort: the worker drops the request if it is still
+      // queued there; an already-executing read runs to completion and the
+      // normal response settles the promise.
+      opts?.signal?.addEventListener(
+        'abort',
+        () => {
+          if (managed.pending.has(id)) {
+            managed.worker.postMessage({ cmd: 'cancel', targetId: id, id: this.nextId++ });
+          }
+        },
+        { once: true },
+      );
     });
   }
 
   private createSendFn(managed: ManagedWorker): SendCommand {
-    return (cmd) => this.sendTo(managed, cmd);
+    return (cmd, opts) => this.sendTo(managed, cmd, opts);
   }
 
   private generateMountId(): string {

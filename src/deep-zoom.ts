@@ -106,8 +106,15 @@ export class DeepZoomGenerator {
    * @param level - DZI level (0 = smallest).
    * @param col - Column index.
    * @param row - Row index.
+   * @param options.signal - Cancels the underlying read while it is still
+   *   queued in the worker (rejects with OpenSlideAbortError).
    */
-  async getTile(level: number, col: number, row: number): Promise<ImageData> {
+  async getTile(
+    level: number,
+    col: number,
+    row: number,
+    options?: { signal?: AbortSignal },
+  ): Promise<ImageData> {
     if (level < 0 || level >= this._levelCount) {
       throw new RangeError(`Level ${level} out of range [0, ${this._levelCount})`);
     }
@@ -138,6 +145,7 @@ export class DeepZoomGenerator {
       slideLevel,
       readW,
       readH,
+      options,
     );
 
     // If the read size matches the desired tile size, return directly

@@ -61,10 +61,23 @@ describe('Slide', () => {
       cmd: 'readRegion',
       handle: 42,
       x: 0, y: 0, level: 0, w: 4, h: 4,
-    });
+    }, { signal: undefined });
     expect(result).toBeInstanceOf(ImageData);
     expect(result.width).toBe(4);
     expect(result.height).toBe(4);
+  });
+
+  test('readRegion forwards an AbortSignal to the worker send', async () => {
+    const fakeBuffer = new ArrayBuffer(4 * 4 * 4);
+    const send = jest.fn().mockResolvedValue(fakeBuffer);
+    const slide = new Slide(send, 42, 'mount1', makeInfo());
+    const controller = new AbortController();
+
+    await slide.readRegion(0, 0, 0, 4, 4, { signal: controller.signal });
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({ cmd: 'readRegion' }),
+      { signal: controller.signal },
+    );
   });
 
   test('close sends close and unmount commands', async () => {

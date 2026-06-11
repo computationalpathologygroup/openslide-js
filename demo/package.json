@@ -1,7 +1,7 @@
 {
-  "name": "test-viewer",
+  "name": "openslide-js-demo-viewer",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,12 +10,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@computationalpathologygroup/openslide-js": "^1.0.0-beta.3",
+    "@computationalpathologygroup/openslide-js": "1.0.0-beta.4",
     "@types/openseadragon": "^6.0.0",
     "openseadragon": "^6.0.2",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "react-resizable-panels": "^4.11.2"
+    "react-resizable-panels": "^4.11.2",
+    "sweetalert2": "^11.26.25"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

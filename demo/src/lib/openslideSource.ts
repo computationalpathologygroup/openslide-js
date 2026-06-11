@@ -38,6 +38,31 @@ export function createOpenSlideTileSource(
   // OSD tile-source customization is inherently dynamic; patch the instance.
   const ts = tileSource as unknown as Record<string, unknown>;
   const aborted = new WeakSet<object>();
+  // Per-tile AbortControllers: aborting cancels the read while it is still
+  // queued in the worker (executing reads finish and are discarded via the
+  // WeakSet as before).
+  const controllers = new Map<object, AbortController>();
+
+  // Dev-only latency collector: localStorage.setItem('osjs-stats', '1'),
+  // reload, pan/zoom, then call window.__tileStats() in the console.
+  const statsEnabled =
+    typeof localStorage !== 'undefined' && localStorage.getItem('osjs-stats') === '1';
+  const durations: number[] = [];
+  let cancelledTiles = 0;
+  if (statsEnabled) {
+    (window as unknown as Record<string, unknown>).__tileStats = () => {
+      const sorted = [...durations].sort((a, b) => a - b);
+      const q = (p: number) =>
+        sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))] : 0;
+      return {
+        slide: slideName,
+        tiles: sorted.length,
+        medianMs: Math.round(q(0.5) * 10) / 10,
+        p95Ms: Math.round(q(0.95) * 10) / 10,
+        cancelled: cancelledTiles,
+      };
+    };
+  }
 
   ts.getTileUrl = (level: number, x: number, y: number): string =>
     `openslide://${slideName}/${level}/${x}/${y}`;
@@ -68,9 +93,15 @@ export function createOpenSlideTileSource(
     // Spread reads across the pool so they decode on parallel worker threads.
     const gen = generators[rr++ % generators.length];
 
-    gen.getTile(level, x, y)
+    const controller = new AbortController();
+    controllers.set(context, controller);
+    const started = statsEnabled ? performance.now() : 0;
+
+    gen.getTile(level, x, y, { signal: controller.signal })
       .then(async (imageData: ImageData) => {
+        controllers.delete(context);
         if (aborted.has(context)) return;
+        if (statsEnabled) durations.push(performance.now() - started);
         const bitmap = await createImageBitmap(imageData);
         if (aborted.has(context)) {
           bitmap.close();
@@ -81,6 +112,12 @@ export function createOpenSlideTileSource(
         context.finish(bitmap, null, 'imageBitmap');
       })
       .catch((err: Error) => {
+        controllers.delete(context);
+        if (err?.name === 'AbortError') {
+          // Cancelled while still queued in the worker — never decoded.
+          cancelledTiles++;
+          return;
+        }
         if (aborted.has(context)) return;
         if (err?.message === 'aborted') return;
         context.finish(null, null, err?.message || 'tile load failed');
@@ -88,9 +125,11 @@ export function createOpenSlideTileSource(
   };
 
   ts.downloadTileAbort = (context: object): void => {
-    // The generator has no worker-level cancel; mark the context so the
-    // in-flight result is discarded (and its bitmap freed) on resolution.
+    // Cancel the read if it is still queued in the worker; reads already
+    // executing finish and are discarded via the WeakSet (bitmap freed).
     aborted.add(context);
+    controllers.get(context)?.abort();
+    controllers.delete(context);
   };
 
   ts.hasTransparency = (): boolean => false;
