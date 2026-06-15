@@ -207,8 +207,6 @@ Re-running the script is safe and idempotent — only missing or stale files are
 
 ## Acknowledgements
 
-The WASM build pipeline under `wasm/` incorporates work from two upstream projects, both MIT-licensed:
-
 - [wasm-vips](https://github.com/kleisauke/wasm-vips) by Kleis Auke Wolthuizen (MIT) — the GLib WebAssembly patch series in `wasm/patches/glib.patch` (per-patch author lines preserved in the mailbox headers).
 - [@conflux-xyz/openslide-wasm](https://github.com/conflux-xyz/openslide-wasm) (MIT, per its npm package) — informed the build strategy
 - [discere-os/gdk-pixbuf.wasm](https://github.com/discere-os/gdk-pixbuf.wasm) and [discere-os/fontconfig.wasm](https://github.com/discere-os/fontconfig.wasm) by Isaac Johnston — informed (a) the patch-light gdk-pixbuf cross-build strategy (lean on upstream's conditional `USE_GMODULE` gating + `-Dbuiltin_loaders=all` rather than stripping C code) and (b) the choice to pin fontconfig at 2.17.1, where upstream's `cc.preprocess()` migration (May 2023) eliminates the need for any compiler-detection patch.
