@@ -249,26 +249,37 @@ html, body, #root {
   line-height: 1.5;
 }
 
-.file-explorer__list {
+/* ── Virtualized slide tree ── */
+.file-explorer__scroll {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  list-style: none;
   padding: 4px 0;
 }
 
-.file-explorer__item {
-  padding: 0 6px;
+.file-explorer__virtual {
+  width: 100%;
 }
 
-.file-explorer__item-btn {
+/* Each absolutely-positioned virtual row */
+.fe-row {
+  padding: 0 6px;
+  box-sizing: border-box;
+}
+
+/* Row inner controls share a 26px line within the 28px row slot */
+.fe-tree__folder,
+.fe-tree__dir,
+.fe-tree__slide {
   width: 100%;
+  height: 26px;
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 5px;
   background: none;
   border: 1px solid transparent;
   border-radius: 6px;
-  padding: 6px 8px;
+  padding: 0 8px;
   cursor: pointer;
   color: var(--fe-text);
   text-align: left;
@@ -277,21 +288,19 @@ html, body, #root {
   transition: background 0.1s;
 }
 
-.file-explorer__item-btn:hover {
+.fe-tree__dir:hover,
+.fe-tree__slide:hover {
   background: var(--fe-hover);
   border-color: var(--fe-border);
 }
 
-.file-explorer__item-btn--open {
-  background: var(--fe-item-open-bg);
-  border-color: var(--fe-item-open-border);
+/* Folder / picked group header */
+.fe-tree__folder {
+  font-weight: 600;
+  color: var(--fe-text);
 }
 
-.file-explorer__item-btn--open:hover {
-  background: #bfdbfe;
-}
-
-.file-explorer__item-name {
+.fe-tree__folder-name {
   flex: 1;
   min-width: 0;
   white-space: nowrap;
@@ -299,7 +308,93 @@ html, body, #root {
   text-overflow: ellipsis;
 }
 
-.file-explorer__item-right {
+.fe-tree__twisty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  color: var(--fe-text-muted);
+}
+
+.fe-tree__chevron {
+  transition: transform 0.1s;
+  flex-shrink: 0;
+  color: var(--fe-text-muted);
+}
+
+.fe-tree__chevron--open {
+  transform: rotate(90deg);
+}
+
+.fe-tree__badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--fe-text-muted);
+  background: var(--fe-surface);
+  border: 1px solid var(--fe-border);
+  border-radius: 10px;
+  padding: 0 6px;
+  flex-shrink: 0;
+}
+
+.fe-tree__badge--busy {
+  color: var(--fe-accent);
+  border-color: var(--fe-item-open-border);
+  background: var(--fe-item-open-bg);
+}
+
+.fe-tree__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 2px;
+  margin-left: 2px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--fe-text-muted);
+  flex-shrink: 0;
+}
+
+.fe-tree__remove:hover {
+  background: var(--fe-hover);
+  color: var(--fe-text);
+}
+
+/* Directory node */
+.fe-tree__dir-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fe-text-muted);
+}
+
+/* Slide leaf */
+.fe-tree__slide--open {
+  background: var(--fe-item-open-bg);
+  border-color: var(--fe-item-open-border);
+}
+
+.fe-tree__slide--open:hover {
+  background: #bfdbfe;
+}
+
+.fe-tree__slide-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fe-tree__slide-right {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -307,7 +402,7 @@ html, body, #root {
   margin-left: 8px;
 }
 
-.file-explorer__item-format {
+.fe-tree__slide-format {
   font-size: 10px;
   font-weight: 500;
   color: var(--fe-text-muted);
@@ -318,13 +413,22 @@ html, body, #root {
   letter-spacing: 0.03em;
 }
 
-.file-explorer__item-dot {
+.fe-tree__slide-dot {
   display: inline-block;
   width: 7px;
   height: 7px;
   border-radius: 50%;
   background: var(--fe-accent);
   flex-shrink: 0;
+}
+
+.fe-tree__message {
+  height: 26px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px 0 24px;
+  font-size: 12px;
+  color: var(--fe-text-muted);
 }
 
 .file-explorer__section-label {

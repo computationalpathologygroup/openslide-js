@@ -43,9 +43,17 @@ export interface OpenSlide {
   entry: SlideEntry;
 }
 
-export interface DirectoryScanResult {
+/**
+ * One opened folder in the explorer. Multiple folders can be open at once; each
+ * keeps its own scanned slides and directory structure. `scanning` is true while
+ * this folder's slides are still streaming in from the (incremental) scan.
+ */
+export interface ScannedFolder {
+  id: string;
+  rootName: string;
   slides: SlideEntry[];
   errors: string[];
+  scanning: boolean;
 }
 
 /** An associated image (thumbnail, macro, label) read from a slide */

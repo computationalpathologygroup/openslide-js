@@ -25,6 +25,14 @@ function openImageModal(img: SlideMeta['associatedImages'][number], slideName: s
     html:
       `<img src="${img.dataUrl}" alt="${escapeHtml(img.name)}" class="app-modal__img" />` +
       `<div class="app-modal__caption">${img.width.toLocaleString()} × ${img.height.toLocaleString()} px</div>`,
+    // Don't let SweetAlert2 mutate page layout while open: its defaults set
+    // `html { height: auto !important }` (heightAuto) and add body padding
+    // (scrollbarPadding). With the app's `html/body { height: 100% }` chain that
+    // collapses the layout height, which resizes the OpenSeadragon container and
+    // makes the viewer jump (then jump back on close). Disabling both keeps the
+    // viewer's zoom/pan perfectly still.
+    heightAuto: false,
+    scrollbarPadding: false,
     showConfirmButton: false,
     showCloseButton: true,
     customClass: {
