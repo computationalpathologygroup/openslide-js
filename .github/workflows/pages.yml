@@ -33,7 +33,13 @@ jobs:
           cache: npm
           cache-dependency-path: demo/package-lock.json
 
-      - run: npm ci
+      # Use `npm install`, not `npm ci`: rolldown/vite pull platform-specific
+      # optional native deps (@rolldown/binding-*, @napi-rs/wasm-runtime →
+      # @emnapi/*) whose hoisting differs os (where the lock is
+      # usually generated) and the linux runner. `npm install` resolves the
+      # correct tree for the runner instead of failing on a cross-platform
+      # lock mismatch.
+      - run: npm install
 
       - name: Build demo
         run: npm run build
