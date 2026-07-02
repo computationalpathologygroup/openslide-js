@@ -172,7 +172,20 @@ export class IoBroker {
     if (!entry) throw new Error(`unknown file: ${fileKey}`);
 
     if (entry.kind === 'file') {
-      return new Uint8Array(await entry.file.slice(start, end).arrayBuffer());
+      // `end` is already clamped to the file size by the block cache, so a read
+      // returning fewer bytes than requested is anomalous. Live-backed File
+      // System Access handles (Windows Chromium) can silently short-read; retry
+      // once before giving up rather than handing OpenSlide truncated data.
+      const want = end - start;
+      let bytes = new Uint8Array(await entry.file.slice(start, end).arrayBuffer());
+      if (bytes.byteLength < want) {
+        console.warn(
+          `openslide-js broker: short read for ${fileKey} bytes ${start}-${end} ` +
+            `(${bytes.byteLength}/${want}); retrying`,
+        );
+        bytes = new Uint8Array(await entry.file.slice(start, end).arrayBuffer());
+      }
+      return bytes;
     }
     if (entry.wholeBody) {
       return entry.wholeBody.subarray(start, end);

@@ -111,7 +111,18 @@ export class WorkerApi {
 
   async open(path: string): Promise<number> {
     const handle = await this.fn.open(path);
-    if (!handle) throw new Error(`Failed to open slide: ${path}`);
+    if (!handle) {
+      // A NULL handle carries no OpenSlide error object, so probe for the
+      // reason: whether a vendor was even detected (detection vs. companion-read
+      // failure) and which mount backend served the bytes. Keeps a silent open
+      // failure from ever being an opaque string again.
+      const vendor = await this.detectVendor(path).catch(() => null);
+      const detail = vendor
+        ? `format detected as "${vendor}" but its files could not be read`
+        : 'no supported slide format was detected';
+      const backend = this.io ? 'broker' : 'workerfs';
+      throw new Error(`Failed to open slide: ${path} (${detail}; io=${backend})`);
+    }
     await this.checkError(handle);
     return handle;
   }
