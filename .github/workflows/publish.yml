@@ -82,5 +82,5 @@ jobs:
             release-bundle/openslide-js-source.tar.gz
             release-bundle/LICENSE
             release-bundle/NOTICE
-            release-bundle/licenses/**
+            release-bundle/licenses/**/*
             release-bundle/SHA256SUMS
