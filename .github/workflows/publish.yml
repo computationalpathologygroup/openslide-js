@@ -62,9 +62,25 @@ jobs:
       - name: Publish to npm
         run: npm publish --provenance
 
+      - name: Assemble release bundle
+        run: |
+          mkdir -p release-bundle
+          cp wasm/dist/openslide.js wasm/dist/openslide.wasm release-bundle/
+          cp LICENSE NOTICE release-bundle/
+          cp -r licenses release-bundle/licenses
+          # Complete corresponding source for the binaries above
+          git archive --format=tar.gz --prefix=openslide-js-src/ HEAD \
+            -o release-bundle/openslide-js-source.tar.gz
+          (cd release-bundle && find . -type f ! -name SHA256SUMS -exec sha256sum {} + > SHA256SUMS)
+
       - name: Attach WASM to release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            wasm/dist/openslide.js
-            wasm/dist/openslide.wasm
+            release-bundle/openslide.js
+            release-bundle/openslide.wasm
+            release-bundle/openslide-js-source.tar.gz
+            release-bundle/LICENSE
+            release-bundle/NOTICE
+            release-bundle/licenses/**
+            release-bundle/SHA256SUMS

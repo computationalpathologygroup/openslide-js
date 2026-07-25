@@ -1,3 +1,9 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-only
+ * Copyright (C) 2025 Computational Pathology Group, Radboud University
+ * Medical Center, Nijmegen, The Netherlands. (TODO(maintainer): confirm)
+ */
+
 /**
  * openslide-api.c
  *

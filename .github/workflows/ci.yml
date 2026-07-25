@@ -48,3 +48,52 @@ jobs:
 
       - name: Unit tests
         run: npm test
+
+  license-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Verify license artifacts are packaged
+        run: |
+          set -e
+          npm pack --dry-run --json > /tmp/pack.json
+          for required in \
+            "LICENSE" \
+            "NOTICE" \
+            "licenses/openslide/" \
+            "wasm/dependencies/fetch-openslide.sh" \
+            "wasm/patches/openslide.patch"
+          do
+            if ! grep -q "$required" /tmp/pack.json; then
+              echo "::error::Required file missing from npm tarball: $required"
+              exit 1
+            fi
+          done
+          echo "License artifact check passed."
+
+      - name: Verify NOTICE covers every fetched dependency
+        run: |
+          set -e
+          # Coarse substring match: fetch-<dep>.sh basenames are checked
+          # case-insensitively against NOTICE. Some upstream project names
+          # differ from their fetch-script name (e.g. the script is named
+          # fetch-libexpat.sh but the project is commonly called "Expat");
+          # NOTICE mentions both forms ("Expat (libexpat)"), so the
+          # substring match still succeeds without extra mapping.
+          missing=0
+          for f in wasm/dependencies/fetch-*.sh; do
+            dep=$(basename "$f" .sh); dep=${dep#fetch-}
+            if ! grep -qi "$dep" NOTICE; then
+              echo "::error::Dependency '$dep' is fetched but not mentioned in NOTICE"
+              missing=1
+            fi
+          done
+          exit $missing
