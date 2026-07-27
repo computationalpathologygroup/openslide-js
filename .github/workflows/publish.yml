@@ -64,23 +64,29 @@ jobs:
 
       - name: Assemble release bundle
         run: |
+          set -e
           mkdir -p release-bundle
           cp wasm/dist/openslide.js wasm/dist/openslide.wasm release-bundle/
           cp LICENSE NOTICE release-bundle/
-          cp -r licenses release-bundle/licenses
-          # Complete corresponding source for the binaries above
+          # Bundle the per-component license texts as one archive: attaching
+          # them individually would flatten the directory structure and
+          # collide on basename (multiple components ship a file named
+          # COPYING, e.g. cairo, glib, gdk-pixbuf, fontconfig, pixman).
+          tar czf release-bundle/licenses.tar.gz licenses
+          # Complete corresponding source for the binaries above (LGPL-2.1 §6)
           git archive --format=tar.gz --prefix=openslide-js-src/ HEAD \
             -o release-bundle/openslide-js-source.tar.gz
           (cd release-bundle && find . -type f ! -name SHA256SUMS -exec sha256sum {} + > SHA256SUMS)
+          ls -la release-bundle
 
-      - name: Attach WASM to release
+      - name: Attach release bundle
         uses: softprops/action-gh-release@v2
         with:
           files: |
             release-bundle/openslide.js
             release-bundle/openslide.wasm
             release-bundle/openslide-js-source.tar.gz
+            release-bundle/licenses.tar.gz
             release-bundle/LICENSE
             release-bundle/NOTICE
-            release-bundle/licenses/**/*
             release-bundle/SHA256SUMS
