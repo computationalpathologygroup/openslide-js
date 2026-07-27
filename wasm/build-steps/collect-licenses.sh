@@ -69,11 +69,17 @@ copy_license_all gdk-pixbuf      gdk-pixbuf/COPYING
 copy_license_all fontconfig      fontconfig/COPYING
 # pixman extracts into a versioned subdirectory (see fetch-pixman.sh),
 # so resolve the directory rather than hard-coding the version.
-PIXMAN_DIR=$(cd "$DEPS" && ls -d pixman/pixman-*/ 2>/dev/null | head -1)
-if [ -z "$PIXMAN_DIR" ]; then
+PIXMAN_MATCHES=$(cd "$DEPS" && ls -d pixman/pixman-*/ 2>/dev/null | wc -l)
+if [ "$PIXMAN_MATCHES" -eq 0 ]; then
   echo "ERROR: could not locate extracted pixman source under $DEPS/pixman" >&2
   exit 1
 fi
+if [ "$PIXMAN_MATCHES" -gt 1 ]; then
+  echo "ERROR: multiple pixman source directories found under $DEPS/pixman; expected exactly one:" >&2
+  (cd "$DEPS" && ls -d pixman/pixman-*/) >&2
+  exit 1
+fi
+PIXMAN_DIR=$(cd "$DEPS" && ls -d pixman/pixman-*/)
 copy_license_all pixman          "${PIXMAN_DIR}COPYING"
 # FreeType elects the FTL (not GPL-2.0-or-later); ship the FTL text plus
 # the top-level file that documents the dual-license election. Both are
