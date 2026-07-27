@@ -68,18 +68,21 @@ copy_license_all cairo           cairo/COPYING cairo/COPYING-LGPL-2.1
 copy_license_all gdk-pixbuf      gdk-pixbuf/COPYING
 copy_license_all fontconfig      fontconfig/COPYING
 # pixman extracts into a versioned subdirectory (see fetch-pixman.sh),
-# so resolve the directory rather than hard-coding the version.
-PIXMAN_MATCHES=$(cd "$DEPS" && ls -d pixman/pixman-*/ 2>/dev/null | wc -l)
+# so resolve the directory rather than hard-coding the version. Use
+# find (not a bare glob passed to ls) so a no-match case reliably
+# yields zero output lines instead of relying on shell glob behaviour.
+PIXMAN_CANDIDATES=$(cd "$DEPS" && find pixman -mindepth 1 -maxdepth 1 -type d -name 'pixman-*' 2>/dev/null)
+PIXMAN_MATCHES=$(printf '%s\n' "$PIXMAN_CANDIDATES" | grep -c . || true)
 if [ "$PIXMAN_MATCHES" -eq 0 ]; then
   echo "ERROR: could not locate extracted pixman source under $DEPS/pixman" >&2
   exit 1
 fi
 if [ "$PIXMAN_MATCHES" -gt 1 ]; then
   echo "ERROR: multiple pixman source directories found under $DEPS/pixman; expected exactly one:" >&2
-  (cd "$DEPS" && ls -d pixman/pixman-*/) >&2
+  printf '%s\n' "$PIXMAN_CANDIDATES" >&2
   exit 1
 fi
-PIXMAN_DIR=$(cd "$DEPS" && ls -d pixman/pixman-*/)
+PIXMAN_DIR="${PIXMAN_CANDIDATES}/"
 copy_license_all pixman          "${PIXMAN_DIR}COPYING"
 # FreeType elects the FTL (not GPL-2.0-or-later); ship the FTL text plus
 # the top-level file that documents the dual-license election. Both are
