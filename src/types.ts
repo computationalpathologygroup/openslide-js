@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-2.1-only
-// Copyright (C) 2026 Computational Pathology Group, Radboud University
-// Medical Center, Nijmegen, The Netherlands.
 
 import type { IoConfig } from './io/protocol.js';
 
