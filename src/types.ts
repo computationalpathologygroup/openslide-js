@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LGPL-2.1-only
+
 import type { IoConfig } from './io/protocol.js';
 
 /** Width and height in pixels. */

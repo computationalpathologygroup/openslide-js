@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LGPL-2.1-only
+
 /** Base error class for all OpenSlide errors. */
 export class OpenSlideError extends Error {
   constructor(message: unknown) {

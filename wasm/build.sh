@@ -29,7 +29,8 @@ for s in \
   build-gdk-pixbuf.sh \
   build-sqlite.sh \
   build-openslide.sh \
-  build-wasm.sh
+  build-wasm.sh \
+  collect-licenses.sh
 do
   sh "$DIR/$s"
 done

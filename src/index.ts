@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LGPL-2.1-only
+
 // Core classes
 export { OpenSlide } from './openslide.js';
 export { Slide } from './slide.js';

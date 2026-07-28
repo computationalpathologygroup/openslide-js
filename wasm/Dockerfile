@@ -130,5 +130,11 @@ COPY openslide-api.c /build/
 COPY build-steps/build-wasm.sh /build/build-steps/
 RUN chmod +x build-steps/build-wasm.sh && ./build-steps/build-wasm.sh
 
+# Collect the license text of every bundled dependency from the fetched
+# source trees, so notices always match the shipped binary. Fails the
+# build if any component's license cannot be found.
+COPY build-steps/collect-licenses.sh /build/build-steps/
+RUN chmod +x build-steps/collect-licenses.sh && ./build-steps/collect-licenses.sh
+
 # Copy output to /output when run
-CMD ["cp", "-r", "/build/out/openslide.js", "/build/out/openslide.wasm", "/output/"]
+CMD ["cp", "-r", "/build/out/openslide.js", "/build/out/openslide.wasm", "/build/out/licenses", "/output/"]

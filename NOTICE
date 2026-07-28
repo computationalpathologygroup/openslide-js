@@ -15,8 +15,19 @@ are distributed.
 
 The compiled WebAssembly artifact wasm/dist/openslide.wasm statically
 links the following projects. Each retains its own license; the
-combined binary is distributed under LGPL-2.1-only (the strongest
-copyleft of any bundled component).
+combined binary is distributed under LGPL-2.1-only, because the
+LGPL-2.1-only components (notably OpenSlide) require that the work as
+a whole be distributed under those terms.
+
+Where a bundled component is dual-licensed, openslide-js elects the
+option noted below and distributes under that option only:
+
+  Cairo      — LGPL-2.1-only (not MPL-1.1)
+  FreeType   — FTL (not GPL-2.0-or-later)
+  zstd       — BSD-3-Clause (not GPL-2.0-only)
+
+The full text of each elected license is reproduced under licenses/ in
+this distribution.
 
   OpenSlide
     Upstream:  https://openslide.org
@@ -68,51 +79,87 @@ copyleft of any bundled component).
 
   pixman
     Upstream:  https://gitlab.freedesktop.org/pixman/pixman
+    Pin:       pixman-0.46.4 (source tarball from cairographics.org)
     License:   MIT
 
   FreeType
     Upstream:  https://freetype.org
+               https://gitlab.freedesktop.org/freetype/freetype
+    Pin:       VER-2-13-0
     License:   FTL OR GPL-2.0-or-later
 
   libtiff
     Upstream:  https://gitlab.com/libtiff/libtiff
+    Pin:       tiff-4.7.0 (source tarball from download.osgeo.org)
     License:   libtiff (BSD-style)
+    Note:      wasm/dependencies/fetch-libtiff.sh additionally applies a
+               Meson build-definition patch fetched from
+               wrapdb.mesonbuild.com/v2/libtiff_4.7.0-1/get_patch (the
+               Meson WrapDB). This patch only adds/adjusts meson.build
+               files for the cross-build; it does not modify libtiff's
+               own C sources. Its license could not be independently
+               confirmed as part of this remediation — flagged for
+               maintainer follow-up rather than assumed.
 
   libjpeg-turbo
     Upstream:  https://libjpeg-turbo.org
+               https://github.com/libjpeg-turbo/libjpeg-turbo
+    Pin:       3.1.4.1
     License:   IJG AND BSD-3-Clause AND Zlib
 
   OpenJPEG
     Upstream:  https://www.openjpeg.org
+               https://github.com/uclouvain/openjpeg
+    Pin:       v2.5.3
     License:   BSD-2-Clause
 
   libpng
     Upstream:  http://www.libpng.org/pub/png/libpng.html
+               https://github.com/pnggroup/libpng
+    Pin:       v1.6.58
     License:   libpng-2.0
 
   libxml2
     Upstream:  https://gitlab.gnome.org/GNOME/libxml2
+    Pin:       commit c94eb0210183b9d7cb43f8e7fddc6be55843ef49
+               (fetch script comment says v2.15.3; the commit itself
+               carries no matching tag at the time of writing)
     License:   MIT
 
   Expat (libexpat)
     Upstream:  https://libexpat.github.io
+               https://github.com/libexpat/libexpat
+    Pin:       R_2_5_0
     License:   MIT
 
   zlib
     Upstream:  https://www.zlib.net
+               https://github.com/madler/zlib
+    Pin:       v1.3.2
     License:   Zlib
 
   zstd
     Upstream:  https://github.com/facebook/zstd
+    Pin:       v1.5.7
     License:   BSD-3-Clause OR GPL-2.0-only
 
   libffi
     Upstream:  https://github.com/libffi/libffi
+    Pin:       v3.4.7
     License:   MIT
 
   SQLite
-    Upstream:  https://www.sqlite.org
+    Upstream:  https://github.com/frida/sqlite (a Meson-buildable fork
+               used by this project; NOT https://www.sqlite.org, the
+               canonical upstream, which does not publish a Meson
+               build directly)
+    Pin:       commit 9337327
     License:   blessing (public-domain dedication)
+    Note:      The frida/sqlite fork adds only a meson.build and a
+               README.md; it carries no LICENSE file of its own and no
+               additional terms were found beyond the SQLite
+               amalgamation's public-domain "blessing" comment,
+               reproduced in licenses/sqlite/BLESSING.txt.
 
 ================================================================================
 2. Source availability (LGPL-2.1 §6)
@@ -136,20 +183,33 @@ specifically the wasm/ directory, which contains:
 Reproducing the bundled wasm binary from these sources requires Docker
 and is documented in README.md under "Building the WASM module".
 
+The complete corresponding source accompanies every distribution of this
+software: it is included in the npm package tarball under wasm/, in the
+source archive attached to each GitHub Release, and in the git
+repository itself.
+
+In addition, and for a period of at least three years from the date of
+distribution of any binary, the copyright holders will provide the
+complete corresponding source for that binary on request, on a physical
+medium, for no more than the cost of performing the distribution.
+Requests should be sent to <TODO(maintainer): contact address>.
+
 ================================================================================
 3. Build infrastructure attribution
 ================================================================================
 
-The WebAssembly build pipeline under wasm/ incorporates work from the
-following upstream projects. Both are MIT-licensed and compatible with
-openslide-js's LGPL-2.1-only distribution.
+The WebAssembly build pipeline under `wasm/` incorporates work from the
+following projects, each under the license noted in its entry. All are
+compatible with openslide-js's LGPL-2.1-only distribution.
 
   @conflux-xyz/openslide-wasm
     Upstream:  https://github.com/conflux-xyz/openslide-wasm
                https://www.npmjs.com/package/@conflux-xyz/openslide-wasm
-    License:   MIT (declared in the package's npm package.json; the
-               upstream GitHub repository does not currently carry an
-               explicit LICENSE file)
+    License:   MIT, per the license field declared in the package's
+               published npm package.json. The upstream GitHub
+               repository does not currently carry an explicit LICENSE
+               file; this attribution is provided in reliance on that
+               declaration and in recognition of the project's work.
     Used for:  The overall WASM build pipeline — the Emscripten base
                image and required packages, the meson and
                cmake flag sets for each bundled native library, and

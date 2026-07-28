@@ -59,12 +59,56 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      # This workflow triggers on `release: published` and does not invoke
+      # ci.yml, so without this step nothing on the path that actually
+      # distributes binaries checks that licenses/ matches the sources they
+      # were built from. It must stay ahead of `npm publish`: a mismatch has
+      # to block publication, not be reported once the tarball is already on
+      # the registry. Container name differs from ci.yml's so the two cannot
+      # collide if both ever run on the same runner.
+      - name: Verify committed licenses/ matches generated output
+        run: |
+          set -e
+          docker create --name license-drift-publish openslide-wasm-builder:latest
+          rm -rf /tmp/generated-licenses
+          docker cp license-drift-publish:/build/out/licenses /tmp/generated-licenses
+          docker rm license-drift-publish
+          # licenses/README.md is hand-written and not generated; exclude it.
+          if ! diff -rq --exclude=README.md licenses /tmp/generated-licenses; then
+            echo "::error::Committed licenses/ does not match the build output — refusing to publish."
+            echo "::error::Regenerate it: see licenses/README.md."
+            exit 1
+          fi
+          echo "licenses/ is in sync with the build."
+
       - name: Publish to npm
         run: npm publish --provenance
 
-      - name: Attach WASM to release
+      - name: Assemble release bundle
+        run: |
+          set -e
+          mkdir -p release-bundle
+          cp wasm/dist/openslide.js wasm/dist/openslide.wasm release-bundle/
+          cp LICENSE NOTICE release-bundle/
+          # Bundle the per-component license texts as one archive: attaching
+          # them individually would flatten the directory structure and
+          # collide on basename (multiple components ship a file named
+          # COPYING, e.g. cairo, glib, gdk-pixbuf, fontconfig, pixman).
+          tar czf release-bundle/licenses.tar.gz licenses
+          # Complete corresponding source for the binaries above (LGPL-2.1 §6)
+          git archive --format=tar.gz --prefix=openslide-js-src/ HEAD \
+            -o release-bundle/openslide-js-source.tar.gz
+          (cd release-bundle && find . -type f ! -name SHA256SUMS -exec sha256sum {} + > SHA256SUMS)
+          ls -la release-bundle
+
+      - name: Attach release bundle
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            wasm/dist/openslide.js
-            wasm/dist/openslide.wasm
+            release-bundle/openslide.js
+            release-bundle/openslide.wasm
+            release-bundle/openslide-js-source.tar.gz
+            release-bundle/licenses.tar.gz
+            release-bundle/LICENSE
+            release-bundle/NOTICE
+            release-bundle/SHA256SUMS
