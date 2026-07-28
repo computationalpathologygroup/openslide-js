@@ -46,6 +46,19 @@ jobs:
           docker cp wasm-extract:/build/out/openslide.wasm wasm/dist/
           docker rm wasm-extract
 
+      - name: Build TypeScript
+        run: npm run build:ts
+
+      - name: Unit tests
+        run: npm test
+
+      # Kept last in this job deliberately. It still gates the build (a
+      # mismatch turns the job red), but running it ahead of the tests would
+      # mean a licenses/ drift silently costs you the entire test signal,
+      # since steps run sequentially and the later ones never execute.
+      # It stays in this job rather than a separate one because it needs the
+      # openslide-wasm-builder image built above; a second job would have to
+      # rebuild it and double an already-long run.
       - name: Verify committed licenses/ matches generated output
         run: |
           set -e
@@ -60,12 +73,6 @@ jobs:
             exit 1
           fi
           echo "licenses/ is in sync with the build."
-
-      - name: Build TypeScript
-        run: npm run build:ts
-
-      - name: Unit tests
-        run: npm test
 
   license-check:
     runs-on: ubuntu-latest
