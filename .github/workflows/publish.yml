@@ -59,6 +59,28 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      # This workflow triggers on `release: published` and does not invoke
+      # ci.yml, so without this step nothing on the path that actually
+      # distributes binaries checks that licenses/ matches the sources they
+      # were built from. It must stay ahead of `npm publish`: a mismatch has
+      # to block publication, not be reported once the tarball is already on
+      # the registry. Container name differs from ci.yml's so the two cannot
+      # collide if both ever run on the same runner.
+      - name: Verify committed licenses/ matches generated output
+        run: |
+          set -e
+          docker create --name license-drift-publish openslide-wasm-builder:latest
+          rm -rf /tmp/generated-licenses
+          docker cp license-drift-publish:/build/out/licenses /tmp/generated-licenses
+          docker rm license-drift-publish
+          # licenses/README.md is hand-written and not generated; exclude it.
+          if ! diff -rq --exclude=README.md licenses /tmp/generated-licenses; then
+            echo "::error::Committed licenses/ does not match the build output — refusing to publish."
+            echo "::error::Regenerate it: see licenses/README.md."
+            exit 1
+          fi
+          echo "licenses/ is in sync with the build."
+
       - name: Publish to npm
         run: npm publish --provenance
 
