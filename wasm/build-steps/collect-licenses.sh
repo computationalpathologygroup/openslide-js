@@ -71,7 +71,10 @@ copy_license_all fontconfig      fontconfig/COPYING
 # so resolve the directory rather than hard-coding the version. Use
 # find (not a bare glob passed to ls) so a no-match case reliably
 # yields zero output lines instead of relying on shell glob behaviour.
-PIXMAN_CANDIDATES=$(cd "$DEPS" && find pixman -mindepth 1 -maxdepth 1 -type d -name 'pixman-*' 2>/dev/null)
+# The `|| true` matters: if $DEPS/pixman is missing entirely, find exits
+# non-zero and `set -e` would kill the script at this assignment, before
+# the guard below can explain why. Swallow the status so the guard runs.
+PIXMAN_CANDIDATES=$(cd "$DEPS" && find pixman -mindepth 1 -maxdepth 1 -type d -name 'pixman-*' 2>/dev/null || true)
 PIXMAN_MATCHES=$(printf '%s\n' "$PIXMAN_CANDIDATES" | grep -c . || true)
 if [ "$PIXMAN_MATCHES" -eq 0 ]; then
   echo "ERROR: could not locate extracted pixman source under $DEPS/pixman" >&2
