@@ -209,15 +209,15 @@ compatible with openslide-js's LGPL-2.1-only distribution.
                LICENSE file at the upstream repository root. The
                package's published npm package.json declares the same.
     Used for:  The overall WASM build pipeline — the Emscripten base
-               image and required packages, the meson and
-               cmake flag sets for each bundled native library, and
-               the emscripten meson cross-file. No source patches to
-               bundled libraries are derived from this project; 
-               all four originally-imported patches (cairo,
-               fontconfig, gdk-pixbuf, openslide) have meson options, 
-               upstream version upgrades, single-line sed transforms 
-               in the fetch scripts, code informed by other projects 
-               (see entries below).
+               image and required packages, the meson and cmake flag
+               sets for each bundled native library, and the
+               emscripten meson cross-file. The GCompareFunc thunk
+               wrappers in wasm/patches/openslide.patch derive from
+               this project's equivalent patch, restricted to the
+               eight source files present in OpenSlide v4.0.0. The
+               originally-imported cairo, fontconfig and gdk-pixbuf
+               patches have since been eliminated entirely (see the
+               entries below).
 
   wasm-vips (by Kleis Auke Wolthuizen)
     Upstream:  https://github.com/kleisauke/wasm-vips
