@@ -7,7 +7,7 @@ Runs entirely in the browser — no server required.
 **[▶ Live demo](https://computationalpathologygroup.github.io/openslide-js/)** — a browser-based
 whole-slide viewer built on this library. Source and details in [`demo/`](demo/README.md).
 
-> For native (Linux / Windows / macOS) usage, see [openslide-bin](https://github.com/openslide/openslide-bin) — the OpenSlide team's official binary distribution of the same C library used by openslide-python, openslide-java, and other native consumers. openslide-js is the WebAssembly sibling: same upstream OpenSlide and dependency pins (v4.0.0, GLib 2.88.1, Cairo 1.18.4, libdicom 1.0.5, etc.) compiled for the browser via Emscripten, with a TypeScript wrapper API on top.
+> For native (Linux / Windows / macOS) usage, see [openslide-bin](https://github.com/openslide/openslide-bin) — the OpenSlide team's official binary distribution of the same C library used by openslide-python, openslide-java, and other native consumers. openslide-js is a WebAssembly sibling: the same upstream OpenSlide C library, compiled for the browser via Emscripten with a TypeScript wrapper API on top. Dependency pins are derived from openslide-bin's but maintained independently, and are recorded in [`NOTICE`](NOTICE).
 
 ## Install
 

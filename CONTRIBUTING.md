@@ -10,7 +10,7 @@ The WASM build is more constrained, because everything we bundle into `wasm/dist
 
 - **The project as a whole is `LGPL-2.1-only`**, matching upstream OpenSlide.
 - **The TypeScript layer** (`src/`) is your work and is distributed under LGPL-2.1-only.
-- **The WASM artifact** statically links the OpenSlide C library plus ~15 dependencies (GLib, Cairo, libtiff, libdicom, etc.). Every one of them has its own upstream license; the combined binary is distributed under LGPL-2.1-only because that's the strongest copyleft of any bundled component.
+- **The WASM artifact** statically links the OpenSlide C library plus 16 explicitly pinned dependencies (GLib, Cairo, libtiff, etc. — one `wasm/dependencies/fetch-*.sh` each), plus libdicom and uthash, which OpenSlide's own build pulls in through its Meson wraps. Every one of them has its own upstream license; the combined binary is distributed under LGPL-2.1-only because that's the strongest copyleft of any bundled component.
 - `NOTICE` enumerates each component, its pin, its license, and any modifications. **If you change which deps are bundled, change their versions, or modify their sources, you must update `NOTICE` in the same PR.**
 
 For the full list and source-availability statement (LGPL-2.1 §6), see [`NOTICE`](NOTICE).
