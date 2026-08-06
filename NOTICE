@@ -205,11 +205,9 @@ compatible with openslide-js's LGPL-2.1-only distribution.
   @conflux-xyz/openslide-wasm
     Upstream:  https://github.com/conflux-xyz/openslide-wasm
                https://www.npmjs.com/package/@conflux-xyz/openslide-wasm
-    License:   MIT, per the license field declared in the package's
-               published npm package.json. The upstream GitHub
-               repository does not currently carry an explicit LICENSE
-               file; this attribution is provided in reliance on that
-               declaration and in recognition of the project's work.
+    License:   MIT — Copyright (c) 2025 Conflux XYZ, Inc. See the
+               LICENSE file at the upstream repository root. The
+               package's published npm package.json declares the same.
     Used for:  The overall WASM build pipeline — the Emscripten base
                image and required packages, the meson and
                cmake flag sets for each bundled native library, and
