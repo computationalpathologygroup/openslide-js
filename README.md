@@ -126,8 +126,8 @@ openslide-js supports the same whole-slide image formats as [OpenSlide](https://
 ### Not Yet Tested
 
 | Vendor | Format | Extension | Support level | Notes |
-|:-------|:-------|:----------|:------|
-| Sakura | SVSLIDE | `.svslide` | SQLite-based, needs filesystem access |
+|:-------|:-------|:---------:|:--------------|:------|
+| Sakura | SVSLIDE | `.svslide` | None | SQLite-based, needs filesystem access |
 
 ### Known limitations & failure modes
 
