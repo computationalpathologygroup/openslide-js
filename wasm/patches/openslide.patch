@@ -1,7 +1,8 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: openslide-js <build@openslide-js>
 Date: Mon, 2 Jun 2026 00:00:00 +0200
-Subject: [PATCH] wasm: thunk GLib sort callbacks via _with_data wrappers
+Origin: derived from the equivalent patch in
+conflux-xyz/openslide-wasm (MIT, Copyright (c) 2025 Conflux XYZ, Inc.)
 
 Modern GLib (>= 2.76) internally routes g_list_sort and g_ptr_array_sort
 through their *_with_data variants. The implicit 2-arg GCompareFunc ->
