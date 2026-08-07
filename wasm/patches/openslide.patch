@@ -1,6 +1,8 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: openslide-js <build@openslide-js>
+From: conflux-xyz/openslide-wasm <>
 Date: Mon, 2 Jun 2026 00:00:00 +0200
+Subject: Openslide Patch
+
 Origin: derived from the equivalent patch in
 conflux-xyz/openslide-wasm (MIT, Copyright (c) 2025 Conflux XYZ, Inc.)
 
